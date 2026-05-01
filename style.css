@@ -74,6 +74,35 @@ p {
   margin-bottom: 0;
 }
 
+.qualityCard {
+  border-color: #3fb950;
+  background: linear-gradient(180deg, rgba(35, 134, 54, 0.22), #161b22);
+}
+
+.qualityCard p {
+  color: #d6ffe0;
+}
+
+.qualitySteps {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.qualitySteps div {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(35, 134, 54, 0.22);
+  border: 1px solid rgba(63, 185, 80, 0.45);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.warningExport {
+  opacity: 0.92;
+}
+
 label {
   display: block;
   margin: 14px 0 8px;
