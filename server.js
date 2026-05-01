@@ -90,7 +90,7 @@ app.get("/", (req, res) => {
   res.status(200).json({
     ok: true,
     name: "Sous-titres IA Render FFmpeg",
-    memoryMode: "disk-streaming + chunk-upload",
+    memoryMode: "disk-streaming + chunk-append",
     maxUploadMb: MAX_UPLOAD_MB,
     chunkSizeMb: CHUNK_SIZE_MB,
     routes: [
@@ -162,7 +162,9 @@ app.post("/api/chunk/init", async (req, res) => {
     if (!Number.isFinite(Number(fileSize))) return res.status(400).send("Taille vidéo invalide");
 
     await fs.mkdir(path.join(jobDir, "chunks"), { recursive: true });
+    await fs.writeFile(path.join(jobDir, "input.mp4"), "");
     await fs.writeFile(path.join(jobDir, "subtitles.srt"), normalizeSrtText(String(srtText)), "utf8");
+    await fs.writeFile(path.join(jobDir, "received.json"), JSON.stringify([], null, 2), "utf8");
     await fs.writeFile(path.join(jobDir, "meta.json"), JSON.stringify({
       jobId,
       fileName,
@@ -190,16 +192,49 @@ app.post("/api/chunk/upload", (req, res) => {
   if (!Number.isInteger(index) || index < 0) return res.status(400).send("index invalide");
 
   uploadChunk.single("chunk")(req, res, async error => {
+    const jobDir = path.join(TMP_ROOT, `job-${jobId}`);
+    const chunkPath = req.file?.path;
+
     if (error) {
       console.error(`[${jobId}] Erreur upload chunk ${index}`, error);
       if (error.code === "LIMIT_FILE_SIZE") return res.status(413).send(`Fragment trop lourd. Taille max : ${CHUNK_SIZE_MB} Mo.`);
       return res.status(400).send("Erreur upload chunk : " + error.message);
     }
 
-    if (!req.file) return res.status(400).send("Fragment manquant");
+    if (!req.file || !chunkPath) return res.status(400).send("Fragment manquant");
 
-    console.log(`[${jobId}] Chunk ${index} reçu - ${formatSize(req.file.size)}`);
-    res.status(200).json({ ok: true, jobId, index, size: req.file.size });
+    try {
+      const meta = JSON.parse(await fs.readFile(path.join(jobDir, "meta.json"), "utf8"));
+      const receivedPath = path.join(jobDir, "received.json");
+      const received = JSON.parse(await fs.readFile(receivedPath, "utf8"));
+
+      if (received.includes(index)) {
+        await fs.rm(chunkPath, { force: true });
+        console.log(`[${jobId}] Chunk ${index} déjà reçu - ignoré`);
+        return res.status(200).json({ ok: true, jobId, index, duplicate: true });
+      }
+
+      const expectedIndex = received.length;
+      if (index !== expectedIndex) {
+        await fs.rm(chunkPath, { force: true });
+        return res.status(409).send(`Fragment reçu dans le mauvais ordre. Attendu : ${expectedIndex}, reçu : ${index}`);
+      }
+
+      const inputVideoPath = path.join(jobDir, "input.mp4");
+      await appendChunkToFile(chunkPath, inputVideoPath);
+      await fs.rm(chunkPath, { force: true });
+
+      received.push(index);
+      await fs.writeFile(receivedPath, JSON.stringify(received, null, 2), "utf8");
+
+      const currentStat = await fs.stat(inputVideoPath);
+      console.log(`[${jobId}] Chunk ${index} ajouté - fragment=${formatSize(req.file.size)} total=${formatSize(currentStat.size)} / ${formatSize(meta.fileSize)}`);
+      res.status(200).json({ ok: true, jobId, index, size: req.file.size, totalReceived: currentStat.size });
+    } catch (appendError) {
+      console.error(`[${jobId}] Erreur append chunk ${index}`, appendError);
+      if (chunkPath) await fs.rm(chunkPath, { force: true }).catch(() => {});
+      res.status(500).send("Erreur append chunk : " + appendError.message);
+    }
   });
 });
 
@@ -208,21 +243,27 @@ app.post("/api/chunk/finish", async (req, res) => {
   if (!jobId) return res.status(400).send("jobId manquant");
 
   const jobDir = path.join(TMP_ROOT, `job-${jobId}`);
-  const chunkDir = path.join(jobDir, "chunks");
   const inputVideoPath = path.join(jobDir, "input.mp4");
   const inputSrtPath = path.join(jobDir, "subtitles.srt");
   const outputPath = path.join(jobDir, "output.mp4");
 
   try {
     const meta = JSON.parse(await fs.readFile(path.join(jobDir, "meta.json"), "utf8"));
+    const received = JSON.parse(await fs.readFile(path.join(jobDir, "received.json"), "utf8"));
     const totalChunks = Number(req.body?.totalChunks || meta.totalChunks);
     if (!Number.isInteger(totalChunks) || totalChunks <= 0) return res.status(400).send("Nombre de fragments invalide");
 
-    console.log(`[${jobId}] Assemblage ${totalChunks} fragments START`);
-    await assembleChunks(chunkDir, inputVideoPath, totalChunks);
+    if (received.length !== totalChunks) {
+      return res.status(409).send(`Fragments incomplets : ${received.length}/${totalChunks}`);
+    }
 
     const videoStat = await fs.stat(inputVideoPath);
-    console.log(`[${jobId}] Assemblage OK - vidéo=${formatSize(videoStat.size)}`);
+    const expectedSize = Number(meta.fileSize);
+    if (Math.abs(videoStat.size - expectedSize) > 1024 * 1024) {
+      return res.status(409).send(`Vidéo assemblée incomplète : ${formatSize(videoStat.size)} / ${formatSize(expectedSize)}`);
+    }
+
+    console.log(`[${jobId}] Vidéo assemblée OK - vidéo=${formatSize(videoStat.size)}`);
 
     await burnSubtitlesAndSend({
       req,
@@ -278,18 +319,9 @@ async function burnSubtitlesAndSend({ req, res, jobId, jobDir, inputVideoPath, i
   });
 }
 
-async function assembleChunks(chunkDir, outputPath, totalChunks) {
-  const output = createWriteStream(outputPath);
-
-  try {
-    for (let index = 0; index < totalChunks; index++) {
-      const chunkPath = path.join(chunkDir, `${String(index).padStart(6, "0")}.part`);
-      await fs.access(chunkPath);
-      await pipeline(createReadStream(chunkPath), output, { end: false });
-    }
-  } finally {
-    output.end();
-  }
+async function appendChunkToFile(chunkPath, outputPath) {
+  const output = createWriteStream(outputPath, { flags: "a" });
+  await pipeline(createReadStream(chunkPath), output);
 }
 
 function normalizeSrtText(text) {
