@@ -157,10 +157,9 @@ downloadBtn.addEventListener("click", () => {
 });
 
 burnBtn.addEventListener("click", async () => {
-  const videoFile = videoFileInput.files[0];
   const srtText = srtOutput.value.trim();
 
-  if (!videoFile) return showStatus("Ajoute une vidéo avant l’export.", "error");
+  if (!videoPreview.src) return showStatus("Charge la vidéo avant l’export.", "error");
   if (!srtText) return showStatus("Génère les sous-titres avant l’export.", "error");
   if (!window.MediaRecorder) return showStatus("Ton navigateur ne permet pas l’export vidéo ici.", "error");
 
@@ -172,9 +171,9 @@ burnBtn.addEventListener("click", async () => {
     burnBtn.textContent = "Export en cours...";
     exportProgress.value = 0;
     downloadVideoLink.classList.remove("show");
-    showStatus("Préparation de l’export vidéo...", "loading");
+    showStatus("Export en temps réel : laisse la vidéo jouer jusqu’à la fin.", "loading");
 
-    const resultBlob = await renderSubtitledVideo(videoFile, subtitleCues);
+    const resultBlob = await renderVisiblePreviewWithSubtitles(subtitleCues);
 
     if (finalVideoUrl) URL.revokeObjectURL(finalVideoUrl);
     finalVideoUrl = URL.createObjectURL(resultBlob);
@@ -184,7 +183,7 @@ burnBtn.addEventListener("click", async () => {
     showStatus("Vidéo sous-titrée créée. Appuie sur Télécharger.", "success");
   } catch (error) {
     console.error(error);
-    showStatus("Erreur pendant l’export vidéo. Essaie une vidéo plus courte.", "error");
+    showStatus("Export impossible sur ce téléphone. Utilise une vidéo plus courte ou télécharge le SRT.", "error");
   } finally {
     burnBtn.disabled = false;
     burnBtn.textContent = "Créer la vidéo sous-titrée";
@@ -299,7 +298,7 @@ function parseSrt(srtText) {
     const lines = block.split("\n").map(line => line.trim()).filter(Boolean);
     if (lines.length < 2) continue;
 
-    let timeLineIndex = lines.findIndex(line => line.includes("-->"));
+    const timeLineIndex = lines.findIndex(line => line.includes("-->"));
     if (timeLineIndex === -1) continue;
 
     const timeLine = lines[timeLineIndex];
@@ -363,28 +362,21 @@ function updateOverlayPositionAndSize() {
   if (position === "bottom") subtitleOverlay.style.bottom = "8%";
 }
 
-async function renderSubtitledVideo(videoFile, cues) {
-  const video = document.createElement("video");
-  video.src = URL.createObjectURL(videoFile);
-  video.muted = false;
-  video.playsInline = true;
-  video.crossOrigin = "anonymous";
+async function renderVisiblePreviewWithSubtitles(cues) {
+  await waitForVideoMetadata(videoPreview);
 
-  await waitForVideoMetadata(video);
-
-  const width = video.videoWidth || 720;
-  const height = video.videoHeight || 1280;
+  const width = videoPreview.videoWidth || 720;
+  const height = videoPreview.videoHeight || 1280;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
 
   const ctx = canvas.getContext("2d");
-  const canvasStream = canvas.captureStream(30);
-  const audioStream = video.captureStream ? video.captureStream() : null;
+  const canvasStream = canvas.captureStream(24);
 
-  if (audioStream) {
-    const audioTracks = audioStream.getAudioTracks();
-    audioTracks.forEach(track => canvasStream.addTrack(track));
+  if (videoPreview.captureStream) {
+    const videoStream = videoPreview.captureStream();
+    videoStream.getAudioTracks().forEach(track => canvasStream.addTrack(track));
   }
 
   const mimeType = getSupportedMimeType();
@@ -400,25 +392,28 @@ async function renderSubtitledVideo(videoFile, cues) {
     recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
   });
 
-  recorder.start(1000);
-  video.currentTime = 0;
-  await video.play();
-
   const fontSize = Number(fontSizeSelect.value);
   const position = subtitlePositionSelect.value;
-  const duration = video.duration || 1;
+  const duration = videoPreview.duration || 1;
+
+  videoPreview.pause();
+  videoPreview.currentTime = 0;
+  await waitForSeek(videoPreview);
+
+  recorder.start(1000);
+  await videoPreview.play();
 
   await new Promise(resolve => {
     function drawFrame() {
       ctx.clearRect(0, 0, width, height);
-      ctx.drawImage(video, 0, 0, width, height);
+      ctx.drawImage(videoPreview, 0, 0, width, height);
 
-      const text = getCueTextAt(cues, video.currentTime);
+      const text = getCueTextAt(cues, videoPreview.currentTime);
       if (text) drawSubtitle(ctx, text, width, height, fontSize, position);
 
-      exportProgress.value = Math.min(100, Math.round((video.currentTime / duration) * 100));
+      exportProgress.value = Math.min(100, Math.round((videoPreview.currentTime / duration) * 100));
 
-      if (video.ended || video.currentTime >= duration) {
+      if (videoPreview.ended || videoPreview.currentTime >= duration) {
         resolve();
         return;
       }
@@ -430,16 +425,27 @@ async function renderSubtitledVideo(videoFile, cues) {
   });
 
   recorder.stop();
-  video.pause();
-  URL.revokeObjectURL(video.src);
+  videoPreview.pause();
   exportProgress.value = 100;
   return await done;
 }
 
 function waitForVideoMetadata(video) {
   return new Promise((resolve, reject) => {
+    if (video.readyState >= 1 && video.videoWidth) return resolve();
     video.onloadedmetadata = () => resolve();
     video.onerror = () => reject(new Error("Impossible de lire la vidéo"));
+  });
+}
+
+function waitForSeek(video) {
+  return new Promise(resolve => {
+    const finish = () => {
+      video.removeEventListener("seeked", finish);
+      resolve();
+    };
+    video.addEventListener("seeked", finish);
+    setTimeout(finish, 500);
   });
 }
 
