@@ -19,7 +19,7 @@
     <section class="card warning">
       <h2>Important</h2>
       <p>
-        Ta clé API OpenAI ne doit pas être mise dans GitHub. Elle sera stockée en secret dans Cloudflare Worker.
+        Ta clé API OpenAI ne doit pas être mise dans GitHub. Elle est stockée en secret dans Cloudflare Worker.
         L’export final se fait sur ton téléphone en WebM.
       </p>
     </section>
@@ -27,9 +27,9 @@
     <section class="card">
       <h2>1. Lien Cloudflare Worker</h2>
       <label for="workerUrl">URL du Worker</label>
-      <input id="workerUrl" type="url" placeholder="https://ton-worker.tonpseudo.workers.dev" autocomplete="off" />
+      <input id="workerUrl" type="url" value="https://srt-openai-worker.skypieachannel.workers.dev" autocomplete="off" />
       <button id="saveWorkerBtn" class="btn secondary">Sauvegarder le lien Worker</button>
-      <p class="info">L’app appelle ce Worker. Le Worker utilise ta clé OpenAI cachée dans Cloudflare.</p>
+      <p class="info">Le lien est déjà pré-rempli. Appuie juste sur sauvegarder si besoin.</p>
     </section>
 
     <section class="card">
