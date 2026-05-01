@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 3000;
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 900);
 const CHUNK_SIZE_MB = Number(process.env.CHUNK_SIZE_MB || 250);
 const BIG_VIDEO_MB = Number(process.env.BIG_VIDEO_MB || 900);
-const SEGMENT_SECONDS = Number(process.env.SEGMENT_SECONDS || 90);
+const SEGMENT_SECONDS = Number(process.env.SEGMENT_SECONDS || 20);
 const TMP_ROOT = path.join(os.tmpdir(), "srt-render-jobs");
 
 await fs.mkdir(TMP_ROOT, { recursive: true });
@@ -92,7 +92,7 @@ app.get("/", (req, res) => {
   res.status(200).json({
     ok: true,
     name: "Sous-titres IA Render FFmpeg",
-    memoryMode: "chunk-upload + segmented-ffmpeg",
+    memoryMode: "chunk-upload + small-segment-ffmpeg",
     maxUploadMb: MAX_UPLOAD_MB,
     chunkSizeMb: CHUNK_SIZE_MB,
     bigVideoMb: BIG_VIDEO_MB,
@@ -291,7 +291,7 @@ async function burnSubtitlesAndSend({ res, jobId, jobDir, inputVideoPath, inputS
   const videoMb = videoStat.size / 1024 / 1024;
 
   if (videoMb >= BIG_VIDEO_MB) {
-    console.log(`[${jobId}] Mode FFmpeg segmenté - vidéo=${formatSize(videoStat.size)}`);
+    console.log(`[${jobId}] Mode FFmpeg segmenté léger - vidéo=${formatSize(videoStat.size)}`);
     await burnSubtitlesSegmented({ jobId, jobDir, inputVideoPath, inputSrtPath, outputPath, fontSize, position });
   } else {
     console.log(`[${jobId}] FFmpeg START - vidéo=${formatSize(videoStat.size)}`);
@@ -301,11 +301,13 @@ async function burnSubtitlesAndSend({ res, jobId, jobDir, inputVideoPath, inputS
       [
         "-hide_banner",
         "-y",
+        "-threads", "1",
+        "-filter_threads", "1",
         "-i", inputVideoPath,
         "-vf", subtitleFilter,
         "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "18",
+        "-preset", "ultrafast",
+        "-crf", "20",
         "-c:a", "copy",
         "-movflags", "+faststart",
         outputPath
@@ -362,19 +364,22 @@ async function burnSubtitlesSegmented({ jobId, jobDir, inputVideoPath, inputSrtP
       [
         "-hide_banner",
         "-y",
+        "-threads", "1",
+        "-filter_threads", "1",
         "-ss", String(start),
         "-t", String(duration),
         "-i", inputVideoPath,
         "-vf", filter,
         "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "18",
+        "-preset", "ultrafast",
+        "-tune", "fastdecode",
+        "-crf", "20",
         "-c:a", "aac",
-        "-b:a", "192k",
+        "-b:a", "160k",
         "-movflags", "+faststart",
         segmentOutputPath
       ],
-      { timeout: 20 * 60 * 1000, maxBuffer: 1024 * 1024 * 20 }
+      { timeout: 12 * 60 * 1000, maxBuffer: 1024 * 1024 * 20 }
     );
 
     const segStat = await fs.stat(segmentOutputPath);
