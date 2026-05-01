@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Sous-titres IA</title>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <main class="app">
+
+    <header class="hero">
+      <div class="logo">SRT</div>
+      <h1>Sous-titres IA</h1>
+      <p>
+        Ajoute un audio, ajoute une vidéo, puis génère automatiquement les sous-titres.
+      </p>
+    </header>
+
+    <section class="card">
+      <h2>1. Clé API OpenAI</h2>
+
+      <label for="apiKey">Clé API</label>
+      <input
+        id="apiKey"
+        type="password"
+        placeholder="Colle ta clé API OpenAI ici"
+        autocomplete="off"
+      />
+
+      <button id="saveKeyBtn" class="btn secondary">
+        Sauvegarder la clé sur ce téléphone
+      </button>
+
+      <p class="info">
+        Usage personnel uniquement : avec GitHub Pages, la clé reste côté navigateur.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>2. Ajouter les fichiers</h2>
+
+      <label for="audioFile">Audio utilisé pour créer les sous-titres</label>
+      <input
+        id="audioFile"
+        type="file"
+        accept="audio/*"
+      />
+
+      <label for="videoFile">Vidéo utilisée pour la prévisualisation</label>
+      <input
+        id="videoFile"
+        type="file"
+        accept="video/*"
+      />
+
+      <button id="loadVideoBtn" class="btn">
+        Charger la vidéo
+      </button>
+    </section>
+
+    <section class="card">
+      <h2>3. Génération</h2>
+
+      <button id="generateBtn" class="btn primary">
+        Générer les sous-titres SRT
+      </button>
+
+      <div id="status" class="status">
+        En attente.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4. Prévisualisation vidéo</h2>
+
+      <div class="videoBox">
+        <video id="videoPreview" controls playsinline></video>
+      </div>
+
+      <p class="info">
+        Après génération, les sous-titres apparaîtront dans le lecteur vidéo.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>5. Sous-titres générés</h2>
+
+      <textarea
+        id="srtOutput"
+        placeholder="Le texte SRT apparaîtra ici..."
+      ></textarea>
+
+      <div class="actions">
+        <button id="copyBtn" class="btn secondary">
+          Copier le SRT
+        </button>
+
+        <button id="downloadBtn" class="btn secondary">
+          Télécharger le SRT
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
