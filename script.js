@@ -9,6 +9,7 @@ const fontSizeSelect = document.getElementById("fontSize");
 const subtitlePositionSelect = document.getElementById("subtitlePosition");
 const exportProgress = document.getElementById("exportProgress");
 const downloadVideoLink = document.getElementById("downloadVideoLink");
+const audioInfo = document.getElementById("audioInfo");
 
 const saveWorkerBtn = document.getElementById("saveWorkerBtn");
 const loadVideoBtn = document.getElementById("loadVideoBtn");
@@ -16,6 +17,7 @@ const generateBtn = document.getElementById("generateBtn");
 const copyBtn = document.getElementById("copyBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const burnBtn = document.getElementById("burnBtn");
+const compressAudioBtn = document.getElementById("compressAudioBtn");
 
 let currentSrtText = "";
 let currentTrackUrl = null;
@@ -23,6 +25,7 @@ let subtitleCues = [];
 let videoObjectUrl = null;
 let finalVideoUrl = null;
 let overlayTimer = null;
+let compressedAudioFile = null;
 
 window.addEventListener("load", () => {
   const savedWorkerUrl = localStorage.getItem("srt_app_worker_url");
@@ -35,6 +38,40 @@ saveWorkerBtn.addEventListener("click", () => {
   localStorage.setItem("srt_app_worker_url", url);
   workerUrlInput.value = url;
   showStatus("Lien Worker sauvegardé sur ce téléphone.", "success");
+});
+
+audioFileInput.addEventListener("change", () => {
+  compressedAudioFile = null;
+  const file = audioFileInput.files[0];
+  if (!file) {
+    audioInfo.textContent = "Aucun audio sélectionné.";
+    return;
+  }
+  audioInfo.textContent = `Audio original : ${formatSize(file.size)}`;
+});
+
+compressAudioBtn.addEventListener("click", async () => {
+  const audioFile = audioFileInput.files[0];
+  if (!audioFile) return showStatus("Ajoute d’abord un audio.", "error");
+
+  try {
+    compressAudioBtn.disabled = true;
+    compressAudioBtn.textContent = "Compression en cours...";
+    audioInfo.textContent = `Audio original : ${formatSize(audioFile.size)}. Compression...`;
+    showStatus("Compression audio en cours sur le téléphone...", "loading");
+
+    compressedAudioFile = await compressAudioToWebm(audioFile);
+    audioInfo.textContent = `Audio compressé prêt : ${formatSize(compressedAudioFile.size)}`;
+    showStatus("Audio compressé. Tu peux générer les sous-titres.", "success");
+  } catch (error) {
+    console.error(error);
+    compressedAudioFile = null;
+    audioInfo.textContent = "Compression impossible sur ce téléphone.";
+    showStatus("Compression impossible. Essaie un audio plus court.", "error");
+  } finally {
+    compressAudioBtn.disabled = false;
+    compressAudioBtn.textContent = "Compresser l’audio";
+  }
 });
 
 loadVideoBtn.addEventListener("click", () => {
@@ -52,11 +89,12 @@ loadVideoBtn.addEventListener("click", () => {
 
 generateBtn.addEventListener("click", async () => {
   const workerUrl = normalizeWorkerUrl(workerUrlInput.value.trim() || localStorage.getItem("srt_app_worker_url") || "");
-  const audioFile = audioFileInput.files[0];
+  const originalAudioFile = audioFileInput.files[0];
+  const audioFile = compressedAudioFile || originalAudioFile;
 
   if (!workerUrl) return showStatus("Ajoute le lien Cloudflare Worker.", "error");
   if (!audioFile) return showStatus("Ajoute un fichier audio.", "error");
-  if (audioFile.size > 25 * 1024 * 1024) return showStatus("Ton audio dépasse 25 Mo. Coupe-le ou compresse-le avant.", "error");
+  if (audioFile.size > 25 * 1024 * 1024) return showStatus("Ton audio dépasse encore 25 Mo. Appuie d’abord sur Compresser l’audio.", "error");
 
   try {
     localStorage.setItem("srt_app_worker_url", workerUrl);
@@ -67,7 +105,7 @@ generateBtn.addEventListener("click", async () => {
     generateBtn.textContent = "Génération en cours...";
 
     const formData = new FormData();
-    formData.append("file", audioFile);
+    formData.append("file", audioFile, audioFile.name || "audio.webm");
     formData.append("language", "fr");
 
     const response = await fetch(workerUrl, {
@@ -78,7 +116,7 @@ generateBtn.addEventListener("click", async () => {
     const text = await response.text();
     if (!response.ok) {
       console.error(text);
-      return showStatus("Erreur Worker/OpenAI. Vérifie ton Worker et ta clé OpenAI dans Cloudflare.", "error");
+      return showStatus("Erreur Worker/OpenAI. Vérifie le Worker Cloudflare.", "error");
     }
 
     currentSrtText = text;
@@ -165,6 +203,60 @@ function normalizeWorkerUrl(url) {
   const clean = url.trim().replace(/\/+$/, "");
   if (!clean.startsWith("https://")) return "";
   return clean;
+}
+
+async function compressAudioToWebm(file) {
+  if (!window.MediaRecorder) throw new Error("MediaRecorder non disponible");
+
+  const audio = document.createElement("audio");
+  audio.src = URL.createObjectURL(file);
+  audio.crossOrigin = "anonymous";
+
+  await waitForAudioMetadata(audio);
+
+  const audioContext = new AudioContext();
+  const source = audioContext.createMediaElementSource(audio);
+  const destination = audioContext.createMediaStreamDestination();
+  source.connect(destination);
+  source.connect(audioContext.destination);
+
+  const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
+  const recorder = new MediaRecorder(destination.stream, {
+    mimeType,
+    audioBitsPerSecond: 64000
+  });
+
+  const chunks = [];
+  recorder.ondataavailable = event => {
+    if (event.data && event.data.size > 0) chunks.push(event.data);
+  };
+
+  const done = new Promise((resolve, reject) => {
+    recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
+    recorder.onerror = event => reject(event.error || new Error("Erreur compression audio"));
+  });
+
+  recorder.start(1000);
+  audio.currentTime = 0;
+  await audio.play();
+
+  await new Promise(resolve => {
+    audio.onended = resolve;
+  });
+
+  recorder.stop();
+  await audioContext.close();
+  URL.revokeObjectURL(audio.src);
+
+  const blob = await done;
+  return new File([blob], "audio-compresse.webm", { type: mimeType });
+}
+
+function waitForAudioMetadata(audio) {
+  return new Promise((resolve, reject) => {
+    audio.onloadedmetadata = () => resolve();
+    audio.onerror = () => reject(new Error("Impossible de lire l’audio"));
+  });
 }
 
 function createVideoSubtitles(srtText) {
@@ -434,6 +526,11 @@ function getSupportedMimeType() {
   ];
 
   return types.find(type => MediaRecorder.isTypeSupported(type)) || "video/webm";
+}
+
+function formatSize(bytes) {
+  if (!bytes) return "0 Mo";
+  return `${(bytes / 1024 / 1024).toFixed(2)} Mo`;
 }
 
 function downloadTextFile(text, filename, type) {
