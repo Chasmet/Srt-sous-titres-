@@ -44,7 +44,17 @@ const upload = multer({
 });
 
 app.use(cors({ origin: "*" }));
+app.options("*", cors({ origin: "*" }));
 app.use(express.json({ limit: "2mb" }));
+
+app.use((req, res, next) => {
+  const size = req.headers["content-length"] ? formatSize(Number(req.headers["content-length"])) : "inconnu";
+  console.log(`[REQ] ${req.method} ${req.url} taille=${size}`);
+  req.on("aborted", () => {
+    console.error(`[REQ] Upload interrompu par le client : ${req.method} ${req.url}`);
+  });
+  next();
+});
 
 app.get("/", (req, res) => {
   res.status(200).json({
@@ -60,15 +70,22 @@ app.get("/health", (req, res) => {
   res.status(200).json({ ok: true });
 });
 
-app.post(
-  "/api/burn-subtitles",
+app.post("/api/burn-subtitles", (req, res) => {
   upload.fields([
     { name: "video", maxCount: 1 },
     { name: "srt", maxCount: 1 }
-  ]),
-  async (req, res) => {
+  ])(req, res, async error => {
     const jobId = req.jobId || crypto.randomBytes(8).toString("hex");
     const jobDir = req.jobDir || path.join(TMP_ROOT, `job-${jobId}`);
+
+    if (error) {
+      console.error(`[${jobId}] Erreur upload multer`, error);
+      await cleanupJob(jobId, jobDir);
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).send(`Fichier trop lourd. Limite actuelle : ${MAX_UPLOAD_MB} Mo.`);
+      }
+      return res.status(400).send("Erreur upload : " + error.message);
+    }
 
     try {
       const videoFile = req.files?.video?.[0];
@@ -116,19 +133,19 @@ app.post(
       res.setHeader("Content-Disposition", "attachment; filename=video-sous-titree-render.mp4");
       res.setHeader("Content-Length", outputStat.size);
 
-      res.download(outputPath, "video-sous-titree-render.mp4", async error => {
-        if (error) console.error(`[${jobId}] Erreur téléchargement`, error);
+      res.download(outputPath, "video-sous-titree-render.mp4", async downloadError => {
+        if (downloadError) console.error(`[${jobId}] Erreur téléchargement`, downloadError);
         await cleanupJob(jobId, jobDir);
       });
-    } catch (error) {
-      console.error(`[${jobId}] Erreur FFmpeg`, error);
+    } catch (processError) {
+      console.error(`[${jobId}] Erreur FFmpeg`, processError);
       if (!res.headersSent) {
-        res.status(500).send("Erreur Render FFmpeg : " + error.message);
+        res.status(500).send("Erreur Render FFmpeg : " + processError.message);
       }
       await cleanupJob(jobId, jobDir);
     }
-  }
-);
+  });
+});
 
 function normalizeSrtText(text) {
   return text
@@ -189,9 +206,10 @@ async function cleanupJob(jobId, jobDir) {
 }
 
 function formatSize(bytes) {
+  if (!Number.isFinite(bytes)) return "inconnu";
   return `${(bytes / 1024 / 1024).toFixed(2)} Mo`;
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Serveur Render FFmpeg démarré sur le port ${PORT}`);
 });
