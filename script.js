@@ -19,6 +19,10 @@ const downloadBtn = document.getElementById("downloadBtn");
 const burnBtn = document.getElementById("burnBtn");
 const compressAudioBtn = document.getElementById("compressAudioBtn");
 
+const HIGH_QUALITY_FPS = 30;
+const HIGH_QUALITY_VIDEO_BITRATE = 50000000;
+const HIGH_QUALITY_AUDIO_BITRATE = 192000;
+
 let currentSrtText = "";
 let currentTrackUrl = null;
 let subtitleCues = [];
@@ -168,10 +172,10 @@ burnBtn.addEventListener("click", async () => {
 
   try {
     burnBtn.disabled = true;
-    burnBtn.textContent = "Export en cours...";
+    burnBtn.textContent = "Export qualité max...";
     exportProgress.value = 0;
     downloadVideoLink.classList.remove("show");
-    showStatus("Export en temps réel : laisse la vidéo jouer jusqu’à la fin.", "loading");
+    showStatus("Export qualité max : fichier plus lourd, ne ferme pas la page.", "loading");
 
     const resultBlob = await renderVisiblePreviewWithSubtitles(subtitleCues);
 
@@ -180,13 +184,13 @@ burnBtn.addEventListener("click", async () => {
     downloadVideoLink.href = finalVideoUrl;
     downloadVideoLink.classList.add("show");
 
-    showStatus("Vidéo sous-titrée créée. Appuie sur Télécharger.", "success");
+    showStatus(`Vidéo créée en qualité max navigateur : ${formatSize(resultBlob.size)}.`, "success");
   } catch (error) {
     console.error(error);
     showStatus("Export impossible sur ce téléphone. Utilise une vidéo plus courte ou télécharge le SRT.", "error");
   } finally {
     burnBtn.disabled = false;
-    burnBtn.textContent = "Créer la vidéo sous-titrée";
+    burnBtn.textContent = "Créer une vidéo sous-titrée rapide";
   }
 });
 
@@ -371,8 +375,8 @@ async function renderVisiblePreviewWithSubtitles(cues) {
   canvas.width = width;
   canvas.height = height;
 
-  const ctx = canvas.getContext("2d");
-  const canvasStream = canvas.captureStream(24);
+  const ctx = canvas.getContext("2d", { alpha: false });
+  const canvasStream = canvas.captureStream(HIGH_QUALITY_FPS);
 
   if (videoPreview.captureStream) {
     const videoStream = videoPreview.captureStream();
@@ -380,7 +384,11 @@ async function renderVisiblePreviewWithSubtitles(cues) {
   }
 
   const mimeType = getSupportedMimeType();
-  const recorder = new MediaRecorder(canvasStream, { mimeType });
+  const recorder = new MediaRecorder(canvasStream, {
+    mimeType,
+    videoBitsPerSecond: HIGH_QUALITY_VIDEO_BITRATE,
+    audioBitsPerSecond: HIGH_QUALITY_AUDIO_BITRATE
+  });
   const chunks = [];
 
   recorder.ondataavailable = event => {
