@@ -11,28 +11,26 @@
     <header class="hero">
       <div class="logo">SRT</div>
       <h1>Sous-titres IA</h1>
-      <p>Ajoute un audio et une vidéo. Le Worker génère les sous-titres, puis tu choisis entre qualité maximale ou export rapide.</p>
+      <p>Ajoute un audio et une vidéo. Le Worker génère les sous-titres, puis tu choisis export SRT, Render MP4 ou test navigateur.</p>
     </header>
 
     <section class="card qualityCard">
-      <h2>Mode conseillé : qualité maximale</h2>
+      <h2>Mode qualité maximale</h2>
       <p>
-        L’aperçu utilise ton MP4 original, donc la qualité reste parfaite. Pour ne pas dégrader la vidéo,
-        télécharge le SRT puis importe la vidéo originale + le SRT dans CapCut, VN ou une autre application de montage.
+        Le meilleur résultat reste : MP4 original + SRT. Pour incruster directement en MP4, on ajoute maintenant Render + FFmpeg.
       </p>
       <div class="qualitySteps">
         <div>1. Génère le SRT</div>
-        <div>2. Télécharge le SRT</div>
-        <div>3. Garde ton MP4 original</div>
-        <div>4. Importe les deux dans CapCut ou VN</div>
+        <div>2. Vérifie l’aperçu</div>
+        <div>3. Exporte via Render FFmpeg</div>
+        <div>4. Télécharge le MP4 final</div>
       </div>
     </section>
 
     <section class="card warning">
-      <h2>Export direct navigateur</h2>
+      <h2>Important Render gratuit</h2>
       <p>
-        Le bouton “Créer la vidéo sous-titrée” est une option de dépannage. Il réenregistre la vidéo en WebM dans le navigateur,
-        donc il peut réduire la qualité. Pour une qualité propre, utilise le SRT avec ton MP4 original.
+        Pour commencer, teste avec une vidéo courte. Les gros fichiers seront gérés plus tard avec une méthode fragmentée.
       </p>
     </section>
 
@@ -55,7 +53,7 @@
         <p class="info">Sur téléphone, l’app compresse en audio WebM léger pour passer sous la limite des 25 Mo.</p>
       </div>
 
-      <label for="videoFile">Vidéo MP4 originale pour l’aperçu</label>
+      <label for="videoFile">Vidéo MP4 originale pour l’aperçu et Render</label>
       <input id="videoFile" type="file" accept="video/*" />
 
       <button id="loadVideoBtn" class="btn">Charger la vidéo originale</button>
@@ -94,9 +92,9 @@
     </section>
 
     <section class="card qualityCard">
-      <h2>6. Export qualité maximale</h2>
+      <h2>6. Export SRT qualité maximale</h2>
       <p>
-        Télécharge ce SRT et garde ta vidéo MP4 originale. C’est la méthode propre pour éviter toute perte de qualité.
+        Télécharge ce SRT et garde ta vidéo MP4 originale. C’est la méthode la plus sûre pour éviter toute perte de qualité.
       </p>
       <textarea id="srtOutput" placeholder="Le texte SRT apparaîtra ici..."></textarea>
       <div class="actions">
@@ -105,8 +103,21 @@
       </div>
     </section>
 
+    <section class="card qualityCard">
+      <h2>7. Export MP4 Render FFmpeg</h2>
+      <p>
+        Cette option envoie la vidéo originale + le SRT à Render. FFmpeg crée un MP4 avec les sous-titres incrustés en meilleure qualité.
+      </p>
+      <label for="renderUrl">URL Render backend</label>
+      <input id="renderUrl" type="url" placeholder="https://ton-backend.onrender.com" autocomplete="off" />
+      <button id="saveRenderBtn" class="btn secondary">Sauvegarder le lien Render</button>
+      <button id="renderExportBtn" class="btn primary">Créer MP4 avec Render FFmpeg</button>
+      <div id="renderStatus" class="status">Render en attente.</div>
+      <a id="renderDownloadLink" class="downloadLink" href="#" download="video-sous-titree-render.mp4">Télécharger le MP4 Render</a>
+    </section>
+
     <section class="card exportCard warningExport">
-      <h2>7. Option dépannage : vidéo sous-titrée automatique</h2>
+      <h2>8. Option dépannage navigateur</h2>
       <p class="info">
         Cette option peut dégrader la qualité, car le navigateur réenregistre la vidéo en WebM. Utilise-la seulement pour un test rapide.
       </p>
