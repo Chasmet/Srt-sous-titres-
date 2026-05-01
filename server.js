@@ -16,6 +16,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 900);
 const CHUNK_SIZE_MB = Number(process.env.CHUNK_SIZE_MB || 250);
+const BIG_VIDEO_MB = Number(process.env.BIG_VIDEO_MB || 900);
+const SEGMENT_SECONDS = Number(process.env.SEGMENT_SECONDS || 90);
 const TMP_ROOT = path.join(os.tmpdir(), "srt-render-jobs");
 
 await fs.mkdir(TMP_ROOT, { recursive: true });
@@ -90,9 +92,11 @@ app.get("/", (req, res) => {
   res.status(200).json({
     ok: true,
     name: "Sous-titres IA Render FFmpeg",
-    memoryMode: "disk-streaming + chunk-append",
+    memoryMode: "chunk-upload + segmented-ffmpeg",
     maxUploadMb: MAX_UPLOAD_MB,
     chunkSizeMb: CHUNK_SIZE_MB,
+    bigVideoMb: BIG_VIDEO_MB,
+    segmentSeconds: SEGMENT_SECONDS,
     routes: [
       "POST /api/burn-subtitles",
       "POST /api/chunk/init",
@@ -140,7 +144,7 @@ app.post("/api/burn-subtitles", (req, res) => {
       const rawSrt = await fs.readFile(inputSrtPath, "utf8");
       await fs.writeFile(inputSrtPath, normalizeSrtText(rawSrt), "utf8");
 
-      await burnSubtitlesAndSend({ req, res, jobId, jobDir, inputVideoPath, inputSrtPath, outputPath, fontSize, position });
+      await burnSubtitlesAndSend({ res, jobId, jobDir, inputVideoPath, inputSrtPath, outputPath, fontSize, position });
     } catch (processError) {
       console.error(`[${jobId}] Erreur FFmpeg`, processError);
       if (!res.headersSent) {
@@ -266,7 +270,6 @@ app.post("/api/chunk/finish", async (req, res) => {
     console.log(`[${jobId}] Vidéo assemblée OK - vidéo=${formatSize(videoStat.size)}`);
 
     await burnSubtitlesAndSend({
-      req,
       res,
       jobId,
       jobDir,
@@ -283,28 +286,33 @@ app.post("/api/chunk/finish", async (req, res) => {
   }
 });
 
-async function burnSubtitlesAndSend({ req, res, jobId, jobDir, inputVideoPath, inputSrtPath, outputPath, fontSize, position }) {
+async function burnSubtitlesAndSend({ res, jobId, jobDir, inputVideoPath, inputSrtPath, outputPath, fontSize, position }) {
   const videoStat = await fs.stat(inputVideoPath);
-  console.log(`[${jobId}] FFmpeg START - vidéo=${formatSize(videoStat.size)}`);
+  const videoMb = videoStat.size / 1024 / 1024;
 
-  const subtitleFilter = buildSubtitleFilter(inputSrtPath, fontSize, position);
-
-  await execFileAsync(
-    ffmpegPath,
-    [
-      "-hide_banner",
-      "-y",
-      "-i", inputVideoPath,
-      "-vf", subtitleFilter,
-      "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-crf", "18",
-      "-c:a", "copy",
-      "-movflags", "+faststart",
-      outputPath
-    ],
-    { timeout: 45 * 60 * 1000, maxBuffer: 1024 * 1024 * 30 }
-  );
+  if (videoMb >= BIG_VIDEO_MB) {
+    console.log(`[${jobId}] Mode FFmpeg segmenté - vidéo=${formatSize(videoStat.size)}`);
+    await burnSubtitlesSegmented({ jobId, jobDir, inputVideoPath, inputSrtPath, outputPath, fontSize, position });
+  } else {
+    console.log(`[${jobId}] FFmpeg START - vidéo=${formatSize(videoStat.size)}`);
+    const subtitleFilter = buildSubtitleFilter(inputSrtPath, fontSize, position);
+    await execFileAsync(
+      ffmpegPath,
+      [
+        "-hide_banner",
+        "-y",
+        "-i", inputVideoPath,
+        "-vf", subtitleFilter,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "18",
+        "-c:a", "copy",
+        "-movflags", "+faststart",
+        outputPath
+      ],
+      { timeout: 45 * 60 * 1000, maxBuffer: 1024 * 1024 * 30 }
+    );
+  }
 
   const outputStat = await fs.stat(outputPath);
   console.log(`[${jobId}] FFmpeg OK - sortie=${formatSize(outputStat.size)}`);
@@ -319,6 +327,96 @@ async function burnSubtitlesAndSend({ req, res, jobId, jobDir, inputVideoPath, i
   });
 }
 
+async function burnSubtitlesSegmented({ jobId, jobDir, inputVideoPath, inputSrtPath, outputPath, fontSize, position }) {
+  const originalSrt = await fs.readFile(inputSrtPath, "utf8");
+  const cues = parseSrt(originalSrt);
+  const srtEnd = cues.length ? Math.max(...cues.map(cue => cue.end)) : 0;
+  const videoDuration = await getVideoDurationSeconds(inputVideoPath).catch(() => srtEnd);
+  const totalDuration = Math.max(videoDuration || 0, srtEnd || 0);
+
+  if (!totalDuration || totalDuration < 1) {
+    throw new Error("Durée vidéo introuvable pour le mode segmenté");
+  }
+
+  const segmentsDir = path.join(jobDir, "segments");
+  await fs.mkdir(segmentsDir, { recursive: true });
+
+  const totalSegments = Math.ceil(totalDuration / SEGMENT_SECONDS);
+  const segmentPaths = [];
+
+  for (let index = 0; index < totalSegments; index++) {
+    const start = index * SEGMENT_SECONDS;
+    const duration = Math.min(SEGMENT_SECONDS, totalDuration - start);
+    if (duration <= 0) continue;
+
+    const segmentSrtPath = path.join(segmentsDir, `sub-${String(index).padStart(4, "0")}.srt`);
+    const segmentOutputPath = path.join(segmentsDir, `part-${String(index).padStart(4, "0")}.mp4`);
+    const segmentSrt = buildShiftedSrtForSegment(cues, start, start + duration);
+    await fs.writeFile(segmentSrtPath, segmentSrt || emptySrt(), "utf8");
+
+    console.log(`[${jobId}] Segment ${index + 1}/${totalSegments} START - start=${start}s durée=${duration}s`);
+
+    const filter = buildSubtitleFilter(segmentSrtPath, fontSize, position);
+    await execFileAsync(
+      ffmpegPath,
+      [
+        "-hide_banner",
+        "-y",
+        "-ss", String(start),
+        "-t", String(duration),
+        "-i", inputVideoPath,
+        "-vf", filter,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "18",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-movflags", "+faststart",
+        segmentOutputPath
+      ],
+      { timeout: 20 * 60 * 1000, maxBuffer: 1024 * 1024 * 20 }
+    );
+
+    const segStat = await fs.stat(segmentOutputPath);
+    console.log(`[${jobId}] Segment ${index + 1}/${totalSegments} OK - ${formatSize(segStat.size)}`);
+    segmentPaths.push(segmentOutputPath);
+  }
+
+  const concatListPath = path.join(segmentsDir, "concat.txt");
+  const concatList = segmentPaths.map(filePath => `file '${filePath.replace(/'/g, "'\\''")}'`).join("\n");
+  await fs.writeFile(concatListPath, concatList, "utf8");
+
+  console.log(`[${jobId}] Assemblage final START - segments=${segmentPaths.length}`);
+  await execFileAsync(
+    ffmpegPath,
+    [
+      "-hide_banner",
+      "-y",
+      "-f", "concat",
+      "-safe", "0",
+      "-i", concatListPath,
+      "-c", "copy",
+      "-movflags", "+faststart",
+      outputPath
+    ],
+    { timeout: 20 * 60 * 1000, maxBuffer: 1024 * 1024 * 20 }
+  );
+  console.log(`[${jobId}] Assemblage final OK`);
+}
+
+async function getVideoDurationSeconds(inputVideoPath) {
+  try {
+    await execFileAsync(ffmpegPath, ["-hide_banner", "-i", inputVideoPath], { timeout: 60 * 1000, maxBuffer: 1024 * 1024 * 5 });
+  } catch (error) {
+    const text = `${error.stderr || ""}\n${error.stdout || ""}`;
+    const match = text.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}\.\d+)/);
+    if (match) {
+      return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+    }
+  }
+  throw new Error("Durée vidéo introuvable");
+}
+
 async function appendChunkToFile(chunkPath, outputPath) {
   const output = createWriteStream(outputPath, { flags: "a" });
   await pipeline(createReadStream(chunkPath), output);
@@ -330,6 +428,61 @@ function normalizeSrtText(text) {
     .replace(/\r/g, "\n")
     .trim()
     .concat("\n");
+}
+
+function parseSrt(text) {
+  const blocks = text.replace(/\r/g, "").trim().split(/\n\s*\n/);
+  const cues = [];
+
+  for (const block of blocks) {
+    const lines = block.split("\n").map(line => line.trim()).filter(Boolean);
+    const timeIndex = lines.findIndex(line => line.includes("-->"));
+    if (timeIndex === -1) continue;
+
+    const [startRaw, endRaw] = lines[timeIndex].split("-->").map(part => part.trim());
+    const start = srtTimeToSeconds(startRaw);
+    const end = srtTimeToSeconds(endRaw);
+    const cueText = lines.slice(timeIndex + 1).join("\n");
+
+    if (Number.isFinite(start) && Number.isFinite(end) && cueText) cues.push({ start, end, text: cueText });
+  }
+
+  return cues;
+}
+
+function buildShiftedSrtForSegment(cues, segmentStart, segmentEnd) {
+  const selected = cues
+    .filter(cue => cue.end > segmentStart && cue.start < segmentEnd)
+    .map((cue, index) => {
+      const shiftedStart = Math.max(0, cue.start - segmentStart);
+      const shiftedEnd = Math.min(segmentEnd - segmentStart, cue.end - segmentStart);
+      return `${index + 1}\n${secondsToSrtTime(shiftedStart)} --> ${secondsToSrtTime(shiftedEnd)}\n${cue.text}`;
+    });
+
+  return selected.join("\n\n") + (selected.length ? "\n" : "");
+}
+
+function emptySrt() {
+  return "1\n00:00:00,000 --> 00:00:00,100\n \n";
+}
+
+function srtTimeToSeconds(value) {
+  const match = String(value).trim().match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
+  if (!match) return NaN;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) + Number(match[4]) / 1000;
+}
+
+function secondsToSrtTime(seconds) {
+  const safe = Math.max(0, seconds);
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const secs = Math.floor(safe % 60);
+  const ms = Math.round((safe - Math.floor(safe)) * 1000);
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(secs)},${String(ms).padStart(3, "0")}`;
+}
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
 }
 
 function buildSubtitleFilter(srtPath, fontSize, position) {
