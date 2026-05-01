@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sous-titres IA</title>
-  <link rel="stylesheet" href="style.css?v=20260501-2138" />
+  <link rel="stylesheet" href="style.css?v=20260501-2145" />
 </head>
 <body>
   <main class="app">
@@ -107,7 +107,7 @@
     <section class="card qualityCard">
       <h2>7. Export MP4 Render FFmpeg</h2>
       <p>
-        Cette option envoie la vidéo originale + le SRT à Render. FFmpeg crée un vrai MP4 avec les sous-titres incrustés.
+        Cette option envoie la vidéo originale + le SRT à Render. Les gros fichiers sont envoyés automatiquement par fragments.
       </p>
       <label for="renderUrl">URL Render backend</label>
       <input id="renderUrl" type="url" value="https://srt-sous-titres.onrender.com" autocomplete="off" />
@@ -128,9 +128,9 @@
     </section>
   </main>
 
-  <script src="render-url-fix.js?v=20260501-2138"></script>
-  <script src="script.js?v=20260501-2138"></script>
-  <script src="render-progress-fix.js?v=20260501-2138"></script>
-  <script src="download-fix.js?v=20260501-2138"></script>
+  <script src="render-url-fix.js?v=20260501-2145"></script>
+  <script src="script.js?v=20260501-2145"></script>
+  <script src="render-chunk-client.js?v=20260501-2145"></script>
+  <script src="download-fix.js?v=20260501-2145"></script>
 </body>
 </html>
