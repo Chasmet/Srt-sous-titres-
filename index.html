@@ -12,24 +12,24 @@
       <div class="logo">SRT</div>
       <h1>Sous-titres IA</h1>
       <p>
-        Ajoute un audio et une vidéo. OpenAI crée les sous-titres, puis l’app les incruste dans une nouvelle vidéo.
+        Ajoute un audio et une vidéo. Cloudflare cache ta clé OpenAI, génère les sous-titres, puis l’app les incruste dans une nouvelle vidéo.
       </p>
     </header>
 
     <section class="card warning">
       <h2>Important</h2>
       <p>
-        Cette version fonctionne sans Render. L’export final se fait directement sur ton téléphone en WebM.
-        Pour un vrai MP4 stable, il faudra plus tard un backend FFmpeg.
+        Ta clé API OpenAI ne doit pas être mise dans GitHub. Elle sera stockée en secret dans Cloudflare Worker.
+        L’export final se fait sur ton téléphone en WebM.
       </p>
     </section>
 
     <section class="card">
-      <h2>1. Clé API OpenAI</h2>
-      <label for="apiKey">Clé API</label>
-      <input id="apiKey" type="password" placeholder="Colle ta clé API OpenAI ici" autocomplete="off" />
-      <button id="saveKeyBtn" class="btn secondary">Sauvegarder la clé sur ce téléphone</button>
-      <p class="info">Usage personnel uniquement : avec GitHub Pages, la clé reste côté navigateur.</p>
+      <h2>1. Lien Cloudflare Worker</h2>
+      <label for="workerUrl">URL du Worker</label>
+      <input id="workerUrl" type="url" placeholder="https://ton-worker.tonpseudo.workers.dev" autocomplete="off" />
+      <button id="saveWorkerBtn" class="btn secondary">Sauvegarder le lien Worker</button>
+      <p class="info">L’app appelle ce Worker. Le Worker utilise ta clé OpenAI cachée dans Cloudflare.</p>
     </section>
 
     <section class="card">
