@@ -3,108 +3,97 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <title>Sous-titres IA</title>
-
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
   <main class="app">
-
     <header class="hero">
       <div class="logo">SRT</div>
       <h1>Sous-titres IA</h1>
       <p>
-        Ajoute un audio, ajoute une vidéo, puis génère automatiquement les sous-titres.
+        Ajoute un audio et une vidéo. OpenAI crée les sous-titres, puis l’app les incruste dans une nouvelle vidéo.
       </p>
     </header>
 
+    <section class="card warning">
+      <h2>Important</h2>
+      <p>
+        Cette version fonctionne sans Render. L’export final se fait directement sur ton téléphone en WebM.
+        Pour un vrai MP4 stable, il faudra plus tard un backend FFmpeg.
+      </p>
+    </section>
+
     <section class="card">
       <h2>1. Clé API OpenAI</h2>
-
       <label for="apiKey">Clé API</label>
-      <input
-        id="apiKey"
-        type="password"
-        placeholder="Colle ta clé API OpenAI ici"
-        autocomplete="off"
-      />
-
-      <button id="saveKeyBtn" class="btn secondary">
-        Sauvegarder la clé sur ce téléphone
-      </button>
-
-      <p class="info">
-        Usage personnel uniquement : avec GitHub Pages, la clé reste côté navigateur.
-      </p>
+      <input id="apiKey" type="password" placeholder="Colle ta clé API OpenAI ici" autocomplete="off" />
+      <button id="saveKeyBtn" class="btn secondary">Sauvegarder la clé sur ce téléphone</button>
+      <p class="info">Usage personnel uniquement : avec GitHub Pages, la clé reste côté navigateur.</p>
     </section>
 
     <section class="card">
       <h2>2. Ajouter les fichiers</h2>
-
       <label for="audioFile">Audio utilisé pour créer les sous-titres</label>
-      <input
-        id="audioFile"
-        type="file"
-        accept="audio/*"
-      />
+      <input id="audioFile" type="file" accept="audio/*" />
 
-      <label for="videoFile">Vidéo utilisée pour la prévisualisation</label>
-      <input
-        id="videoFile"
-        type="file"
-        accept="video/*"
-      />
+      <label for="videoFile">Vidéo finale à sous-titrer</label>
+      <input id="videoFile" type="file" accept="video/*" />
 
-      <button id="loadVideoBtn" class="btn">
-        Charger la vidéo
-      </button>
+      <button id="loadVideoBtn" class="btn">Charger la vidéo</button>
     </section>
 
     <section class="card">
-      <h2>3. Génération</h2>
-
-      <button id="generateBtn" class="btn primary">
-        Générer les sous-titres SRT
-      </button>
-
-      <div id="status" class="status">
-        En attente.
-      </div>
+      <h2>3. Génération des sous-titres</h2>
+      <button id="generateBtn" class="btn primary">Générer les sous-titres SRT</button>
+      <div id="status" class="status">En attente.</div>
     </section>
 
     <section class="card">
-      <h2>4. Prévisualisation vidéo</h2>
-
+      <h2>4. Prévisualisation</h2>
       <div class="videoBox">
         <video id="videoPreview" controls playsinline></video>
+        <div id="subtitleOverlay" class="subtitleOverlay"></div>
       </div>
-
-      <p class="info">
-        Après génération, les sous-titres apparaîtront dans le lecteur vidéo.
-      </p>
+      <p class="info">Les sous-titres apparaissent par-dessus la vidéo pour vérifier le résultat.</p>
     </section>
 
     <section class="card">
-      <h2>5. Sous-titres générés</h2>
+      <h2>5. Réglage des sous-titres</h2>
+      <label for="fontSize">Taille du texte</label>
+      <select id="fontSize">
+        <option value="34">Petit</option>
+        <option value="42" selected>Moyen</option>
+        <option value="52">Grand</option>
+      </select>
 
-      <textarea
-        id="srtOutput"
-        placeholder="Le texte SRT apparaîtra ici..."
-      ></textarea>
+      <label for="subtitlePosition">Position</label>
+      <select id="subtitlePosition">
+        <option value="bottom" selected>Bas de la vidéo</option>
+        <option value="middle">Milieu de la vidéo</option>
+        <option value="top">Haut de la vidéo</option>
+      </select>
+    </section>
 
+    <section class="card">
+      <h2>6. Sous-titres générés</h2>
+      <textarea id="srtOutput" placeholder="Le texte SRT apparaîtra ici..."></textarea>
       <div class="actions">
-        <button id="copyBtn" class="btn secondary">
-          Copier le SRT
-        </button>
-
-        <button id="downloadBtn" class="btn secondary">
-          Télécharger le SRT
-        </button>
+        <button id="copyBtn" class="btn secondary">Copier le SRT</button>
+        <button id="downloadBtn" class="btn secondary">Télécharger le SRT</button>
       </div>
     </section>
 
+    <section class="card exportCard">
+      <h2>7. Incruster dans la vidéo</h2>
+      <p class="info">
+        L’app relit la vidéo depuis le début, dessine les sous-titres dessus et crée une nouvelle vidéo.
+        Ne ferme pas la page pendant l’export.
+      </p>
+      <button id="burnBtn" class="btn primary">Créer la vidéo sous-titrée</button>
+      <progress id="exportProgress" value="0" max="100"></progress>
+      <a id="downloadVideoLink" class="downloadLink" href="#" download="video-sous-titree.webm">Télécharger la vidéo sous-titrée</a>
+    </section>
   </main>
 
   <script src="script.js"></script>
