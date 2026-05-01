@@ -11,17 +11,12 @@
     <header class="hero">
       <div class="logo">SRT</div>
       <h1>Sous-titres IA</h1>
-      <p>
-        Ajoute un audio et une vidéo. Cloudflare cache ta clé OpenAI, génère les sous-titres, puis l’app les incruste dans une nouvelle vidéo.
-      </p>
+      <p>Ajoute un audio et une vidéo. Le Worker génère les sous-titres, puis l’app les incruste dans une nouvelle vidéo.</p>
     </header>
 
     <section class="card warning">
       <h2>Important</h2>
-      <p>
-        Ta clé API OpenAI ne doit pas être mise dans GitHub. Elle est stockée en secret dans Cloudflare Worker.
-        L’export final se fait sur ton téléphone en WebM.
-      </p>
+      <p>La génération passe par ton Worker sécurisé. L’export final se fait sur ton téléphone en WebM.</p>
     </section>
 
     <section class="card">
@@ -36,6 +31,12 @@
       <h2>2. Ajouter les fichiers</h2>
       <label for="audioFile">Audio utilisé pour créer les sous-titres</label>
       <input id="audioFile" type="file" accept="audio/*" />
+
+      <div class="compressBox">
+        <button id="compressAudioBtn" class="btn secondary">Compresser l’audio</button>
+        <div id="audioInfo" class="miniStatus">Aucun audio compressé.</div>
+        <p class="info">Sur téléphone, l’app compresse en audio WebM léger pour passer sous la limite des 25 Mo.</p>
+      </div>
 
       <label for="videoFile">Vidéo finale à sous-titrer</label>
       <input id="videoFile" type="file" accept="video/*" />
@@ -86,10 +87,7 @@
 
     <section class="card exportCard">
       <h2>7. Incruster dans la vidéo</h2>
-      <p class="info">
-        L’app relit la vidéo depuis le début, dessine les sous-titres dessus et crée une nouvelle vidéo.
-        Ne ferme pas la page pendant l’export.
-      </p>
+      <p class="info">L’app relit la vidéo depuis le début, dessine les sous-titres dessus et crée une nouvelle vidéo. Ne ferme pas la page pendant l’export.</p>
       <button id="burnBtn" class="btn primary">Créer la vidéo sous-titrée</button>
       <progress id="exportProgress" value="0" max="100"></progress>
       <a id="downloadVideoLink" class="downloadLink" href="#" download="video-sous-titree.webm">Télécharger la vidéo sous-titrée</a>
