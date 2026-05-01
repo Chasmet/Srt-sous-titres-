@@ -10,6 +10,9 @@ const subtitlePositionSelect = document.getElementById("subtitlePosition");
 const exportProgress = document.getElementById("exportProgress");
 const downloadVideoLink = document.getElementById("downloadVideoLink");
 const audioInfo = document.getElementById("audioInfo");
+const renderUrlInput = document.getElementById("renderUrl");
+const renderStatus = document.getElementById("renderStatus");
+const renderDownloadLink = document.getElementById("renderDownloadLink");
 
 const saveWorkerBtn = document.getElementById("saveWorkerBtn");
 const loadVideoBtn = document.getElementById("loadVideoBtn");
@@ -18,31 +21,43 @@ const copyBtn = document.getElementById("copyBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const burnBtn = document.getElementById("burnBtn");
 const compressAudioBtn = document.getElementById("compressAudioBtn");
-
-const HIGH_QUALITY_FPS = 30;
-const HIGH_QUALITY_VIDEO_BITRATE = 50000000;
-const HIGH_QUALITY_AUDIO_BITRATE = 192000;
+const saveRenderBtn = document.getElementById("saveRenderBtn");
+const renderExportBtn = document.getElementById("renderExportBtn");
 
 let currentSrtText = "";
 let currentTrackUrl = null;
 let subtitleCues = [];
 let videoObjectUrl = null;
 let finalVideoUrl = null;
+let renderVideoUrl = null;
 let overlayTimer = null;
 let compressedAudioFile = null;
 
 window.addEventListener("load", () => {
   const savedWorkerUrl = localStorage.getItem("srt_app_worker_url");
   if (savedWorkerUrl) workerUrlInput.value = savedWorkerUrl;
+
+  const savedRenderUrl = localStorage.getItem("srt_app_render_url");
+  if (savedRenderUrl && renderUrlInput) renderUrlInput.value = savedRenderUrl;
 });
 
 saveWorkerBtn.addEventListener("click", () => {
-  const url = normalizeWorkerUrl(workerUrlInput.value.trim());
+  const url = normalizeUrl(workerUrlInput.value.trim());
   if (!url) return showStatus("Ajoute l’URL de ton Worker Cloudflare.", "error");
   localStorage.setItem("srt_app_worker_url", url);
   workerUrlInput.value = url;
   showStatus("Lien Worker sauvegardé sur ce téléphone.", "success");
 });
+
+if (saveRenderBtn) {
+  saveRenderBtn.addEventListener("click", () => {
+    const url = normalizeUrl(renderUrlInput.value.trim());
+    if (!url) return showRenderStatus("Ajoute l’URL de ton backend Render.", "error");
+    localStorage.setItem("srt_app_render_url", url);
+    renderUrlInput.value = url;
+    showRenderStatus("Lien Render sauvegardé sur ce téléphone.", "success");
+  });
+}
 
 audioFileInput.addEventListener("change", () => {
   compressedAudioFile = null;
@@ -92,7 +107,7 @@ loadVideoBtn.addEventListener("click", () => {
 });
 
 generateBtn.addEventListener("click", async () => {
-  const workerUrl = normalizeWorkerUrl(workerUrlInput.value.trim() || localStorage.getItem("srt_app_worker_url") || "");
+  const workerUrl = normalizeUrl(workerUrlInput.value.trim() || localStorage.getItem("srt_app_worker_url") || "");
   const originalAudioFile = audioFileInput.files[0];
   const audioFile = compressedAudioFile || originalAudioFile;
 
@@ -160,6 +175,57 @@ downloadBtn.addEventListener("click", () => {
   showStatus("Fichier SRT téléchargé.", "success");
 });
 
+if (renderExportBtn) {
+  renderExportBtn.addEventListener("click", async () => {
+    const renderUrl = normalizeUrl(renderUrlInput.value.trim() || localStorage.getItem("srt_app_render_url") || "");
+    const videoFile = videoFileInput.files[0];
+    const srtText = srtOutput.value.trim();
+
+    if (!renderUrl) return showRenderStatus("Ajoute le lien Render.", "error");
+    if (!videoFile) return showRenderStatus("Ajoute la vidéo originale.", "error");
+    if (!srtText) return showRenderStatus("Génère d’abord les sous-titres SRT.", "error");
+
+    try {
+      localStorage.setItem("srt_app_render_url", renderUrl);
+      renderUrlInput.value = renderUrl;
+      renderExportBtn.disabled = true;
+      renderExportBtn.textContent = "Render travaille...";
+      renderDownloadLink.classList.remove("show");
+      showRenderStatus("Envoi à Render. Ne ferme pas la page.", "loading");
+
+      const formData = new FormData();
+      formData.append("video", videoFile, videoFile.name || "video.mp4");
+      formData.append("srt", new Blob([srtText], { type: "text/plain;charset=utf-8" }), "subtitles.srt");
+      formData.append("fontSize", fontSizeSelect.value);
+      formData.append("position", subtitlePositionSelect.value);
+
+      const response = await fetch(`${renderUrl}/api/burn-subtitles`, {
+        method: "POST",
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(errorText);
+        return showRenderStatus("Erreur Render. Vérifie le backend ou teste une vidéo plus courte.", "error");
+      }
+
+      const blob = await response.blob();
+      if (renderVideoUrl) URL.revokeObjectURL(renderVideoUrl);
+      renderVideoUrl = URL.createObjectURL(blob);
+      renderDownloadLink.href = renderVideoUrl;
+      renderDownloadLink.classList.add("show");
+      showRenderStatus(`MP4 Render créé : ${formatSize(blob.size)}.`, "success");
+    } catch (error) {
+      console.error(error);
+      showRenderStatus("Impossible de contacter Render.", "error");
+    } finally {
+      renderExportBtn.disabled = false;
+      renderExportBtn.textContent = "Créer MP4 avec Render FFmpeg";
+    }
+  });
+}
+
 burnBtn.addEventListener("click", async () => {
   const srtText = srtOutput.value.trim();
 
@@ -172,10 +238,10 @@ burnBtn.addEventListener("click", async () => {
 
   try {
     burnBtn.disabled = true;
-    burnBtn.textContent = "Export qualité max...";
+    burnBtn.textContent = "Export en cours...";
     exportProgress.value = 0;
     downloadVideoLink.classList.remove("show");
-    showStatus("Export qualité max : fichier plus lourd, ne ferme pas la page.", "loading");
+    showStatus("Export navigateur simple : laisse la vidéo jouer jusqu’à la fin.", "loading");
 
     const resultBlob = await renderVisiblePreviewWithSubtitles(subtitleCues);
 
@@ -184,10 +250,10 @@ burnBtn.addEventListener("click", async () => {
     downloadVideoLink.href = finalVideoUrl;
     downloadVideoLink.classList.add("show");
 
-    showStatus(`Vidéo créée en qualité max navigateur : ${formatSize(resultBlob.size)}.`, "success");
+    showStatus(`Vidéo navigateur créée : ${formatSize(resultBlob.size)}.`, "success");
   } catch (error) {
     console.error(error);
-    showStatus("Export impossible sur ce téléphone. Utilise une vidéo plus courte ou télécharge le SRT.", "error");
+    showStatus("Export impossible sur ce téléphone. Utilise Render ou télécharge le SRT.", "error");
   } finally {
     burnBtn.disabled = false;
     burnBtn.textContent = "Créer une vidéo sous-titrée rapide";
@@ -201,7 +267,7 @@ videoPreview.addEventListener("pause", updateSubtitleOverlay);
 videoPreview.addEventListener("seeked", updateSubtitleOverlay);
 videoPreview.addEventListener("timeupdate", updateSubtitleOverlay);
 
-function normalizeWorkerUrl(url) {
+function normalizeUrl(url) {
   if (!url) return "";
   const clean = url.trim().replace(/\/+$/, "");
   if (!clean.startsWith("https://")) return "";
@@ -375,8 +441,8 @@ async function renderVisiblePreviewWithSubtitles(cues) {
   canvas.width = width;
   canvas.height = height;
 
-  const ctx = canvas.getContext("2d", { alpha: false });
-  const canvasStream = canvas.captureStream(HIGH_QUALITY_FPS);
+  const ctx = canvas.getContext("2d");
+  const canvasStream = canvas.captureStream(24);
 
   if (videoPreview.captureStream) {
     const videoStream = videoPreview.captureStream();
@@ -384,11 +450,7 @@ async function renderVisiblePreviewWithSubtitles(cues) {
   }
 
   const mimeType = getSupportedMimeType();
-  const recorder = new MediaRecorder(canvasStream, {
-    mimeType,
-    videoBitsPerSecond: HIGH_QUALITY_VIDEO_BITRATE,
-    audioBitsPerSecond: HIGH_QUALITY_AUDIO_BITRATE
-  });
+  const recorder = new MediaRecorder(canvasStream, { mimeType });
   const chunks = [];
 
   recorder.ondataavailable = event => {
@@ -563,4 +625,11 @@ function showStatus(message, type) {
   statusBox.textContent = message;
   statusBox.className = "status";
   if (type) statusBox.classList.add(type);
+}
+
+function showRenderStatus(message, type) {
+  if (!renderStatus) return;
+  renderStatus.textContent = message;
+  renderStatus.className = "status";
+  if (type) renderStatus.classList.add(type);
 }
