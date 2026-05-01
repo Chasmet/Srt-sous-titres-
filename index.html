@@ -11,12 +11,29 @@
     <header class="hero">
       <div class="logo">SRT</div>
       <h1>Sous-titres IA</h1>
-      <p>Ajoute un audio et une vidéo. Le Worker génère les sous-titres, puis l’app les incruste dans une nouvelle vidéo.</p>
+      <p>Ajoute un audio et une vidéo. Le Worker génère les sous-titres, puis tu choisis entre qualité maximale ou export rapide.</p>
     </header>
 
+    <section class="card qualityCard">
+      <h2>Mode conseillé : qualité maximale</h2>
+      <p>
+        L’aperçu utilise ton MP4 original, donc la qualité reste parfaite. Pour ne pas dégrader la vidéo,
+        télécharge le SRT puis importe la vidéo originale + le SRT dans CapCut, VN ou une autre application de montage.
+      </p>
+      <div class="qualitySteps">
+        <div>1. Génère le SRT</div>
+        <div>2. Télécharge le SRT</div>
+        <div>3. Garde ton MP4 original</div>
+        <div>4. Importe les deux dans CapCut ou VN</div>
+      </div>
+    </section>
+
     <section class="card warning">
-      <h2>Important</h2>
-      <p>La génération passe par ton Worker sécurisé. L’export final se fait sur ton téléphone en WebM.</p>
+      <h2>Export direct navigateur</h2>
+      <p>
+        Le bouton “Créer la vidéo sous-titrée” est une option de dépannage. Il réenregistre la vidéo en WebM dans le navigateur,
+        donc il peut réduire la qualité. Pour une qualité propre, utilise le SRT avec ton MP4 original.
+      </p>
     </section>
 
     <section class="card">
@@ -38,10 +55,10 @@
         <p class="info">Sur téléphone, l’app compresse en audio WebM léger pour passer sous la limite des 25 Mo.</p>
       </div>
 
-      <label for="videoFile">Vidéo finale à sous-titrer</label>
+      <label for="videoFile">Vidéo MP4 originale pour l’aperçu</label>
       <input id="videoFile" type="file" accept="video/*" />
 
-      <button id="loadVideoBtn" class="btn">Charger la vidéo</button>
+      <button id="loadVideoBtn" class="btn">Charger la vidéo originale</button>
     </section>
 
     <section class="card">
@@ -51,12 +68,12 @@
     </section>
 
     <section class="card">
-      <h2>4. Prévisualisation</h2>
+      <h2>4. Aperçu propre sur ton MP4 original</h2>
       <div class="videoBox">
         <video id="videoPreview" controls playsinline></video>
         <div id="subtitleOverlay" class="subtitleOverlay"></div>
       </div>
-      <p class="info">Les sous-titres apparaissent par-dessus la vidéo pour vérifier le résultat.</p>
+      <p class="info">Cet aperçu ne dégrade pas la vidéo : les sous-titres sont simplement affichés par-dessus ton MP4 original.</p>
     </section>
 
     <section class="card">
@@ -76,19 +93,24 @@
       </select>
     </section>
 
-    <section class="card">
-      <h2>6. Sous-titres générés</h2>
+    <section class="card qualityCard">
+      <h2>6. Export qualité maximale</h2>
+      <p>
+        Télécharge ce SRT et garde ta vidéo MP4 originale. C’est la méthode propre pour éviter toute perte de qualité.
+      </p>
       <textarea id="srtOutput" placeholder="Le texte SRT apparaîtra ici..."></textarea>
       <div class="actions">
         <button id="copyBtn" class="btn secondary">Copier le SRT</button>
-        <button id="downloadBtn" class="btn secondary">Télécharger le SRT</button>
+        <button id="downloadBtn" class="btn primary">Télécharger le SRT pour CapCut / VN</button>
       </div>
     </section>
 
-    <section class="card exportCard">
-      <h2>7. Incruster dans la vidéo</h2>
-      <p class="info">L’app relit la vidéo depuis le début, dessine les sous-titres dessus et crée une nouvelle vidéo. Ne ferme pas la page pendant l’export.</p>
-      <button id="burnBtn" class="btn primary">Créer la vidéo sous-titrée</button>
+    <section class="card exportCard warningExport">
+      <h2>7. Option dépannage : vidéo sous-titrée automatique</h2>
+      <p class="info">
+        Cette option peut dégrader la qualité, car le navigateur réenregistre la vidéo en WebM. Utilise-la seulement pour un test rapide.
+      </p>
+      <button id="burnBtn" class="btn secondary">Créer une vidéo sous-titrée rapide</button>
       <progress id="exportProgress" value="0" max="100"></progress>
       <a id="downloadVideoLink" class="downloadLink" href="#" download="video-sous-titree.webm">Télécharger la vidéo sous-titrée</a>
     </section>
