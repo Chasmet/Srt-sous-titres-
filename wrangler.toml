@@ -1,0 +1,6 @@
+name = "srt-openai-worker"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-05-01"
+
+[vars]
+APP_NAME = "Sous-titres IA"
