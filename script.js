@@ -1,4 +1,4 @@
-const apiKeyInput = document.getElementById("apiKey");
+const workerUrlInput = document.getElementById("workerUrl");
 const audioFileInput = document.getElementById("audioFile");
 const videoFileInput = document.getElementById("videoFile");
 const videoPreview = document.getElementById("videoPreview");
@@ -10,7 +10,7 @@ const subtitlePositionSelect = document.getElementById("subtitlePosition");
 const exportProgress = document.getElementById("exportProgress");
 const downloadVideoLink = document.getElementById("downloadVideoLink");
 
-const saveKeyBtn = document.getElementById("saveKeyBtn");
+const saveWorkerBtn = document.getElementById("saveWorkerBtn");
 const loadVideoBtn = document.getElementById("loadVideoBtn");
 const generateBtn = document.getElementById("generateBtn");
 const copyBtn = document.getElementById("copyBtn");
@@ -25,15 +25,16 @@ let finalVideoUrl = null;
 let overlayTimer = null;
 
 window.addEventListener("load", () => {
-  const savedKey = localStorage.getItem("openai_api_key_srt_app");
-  if (savedKey) apiKeyInput.value = savedKey;
+  const savedWorkerUrl = localStorage.getItem("srt_app_worker_url");
+  if (savedWorkerUrl) workerUrlInput.value = savedWorkerUrl;
 });
 
-saveKeyBtn.addEventListener("click", () => {
-  const key = apiKeyInput.value.trim();
-  if (!key) return showStatus("Ajoute d’abord ta clé API OpenAI.", "error");
-  localStorage.setItem("openai_api_key_srt_app", key);
-  showStatus("Clé API sauvegardée sur ce téléphone.", "success");
+saveWorkerBtn.addEventListener("click", () => {
+  const url = normalizeWorkerUrl(workerUrlInput.value.trim());
+  if (!url) return showStatus("Ajoute l’URL de ton Worker Cloudflare.", "error");
+  localStorage.setItem("srt_app_worker_url", url);
+  workerUrlInput.value = url;
+  showStatus("Lien Worker sauvegardé sur ce téléphone.", "success");
 });
 
 loadVideoBtn.addEventListener("click", () => {
@@ -50,34 +51,34 @@ loadVideoBtn.addEventListener("click", () => {
 });
 
 generateBtn.addEventListener("click", async () => {
-  const apiKey = apiKeyInput.value.trim();
+  const workerUrl = normalizeWorkerUrl(workerUrlInput.value.trim() || localStorage.getItem("srt_app_worker_url") || "");
   const audioFile = audioFileInput.files[0];
 
-  if (!apiKey) return showStatus("Ajoute ta clé API OpenAI.", "error");
+  if (!workerUrl) return showStatus("Ajoute le lien Cloudflare Worker.", "error");
   if (!audioFile) return showStatus("Ajoute un fichier audio.", "error");
   if (audioFile.size > 25 * 1024 * 1024) return showStatus("Ton audio dépasse 25 Mo. Coupe-le ou compresse-le avant.", "error");
 
   try {
-    showStatus("Envoi de l’audio à OpenAI...", "loading");
+    localStorage.setItem("srt_app_worker_url", workerUrl);
+    workerUrlInput.value = workerUrl;
+
+    showStatus("Envoi de l’audio au Worker Cloudflare...", "loading");
     generateBtn.disabled = true;
     generateBtn.textContent = "Génération en cours...";
 
     const formData = new FormData();
     formData.append("file", audioFile);
-    formData.append("model", "whisper-1");
-    formData.append("response_format", "srt");
     formData.append("language", "fr");
 
-    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    const response = await fetch(workerUrl, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}` },
       body: formData
     });
 
     const text = await response.text();
     if (!response.ok) {
       console.error(text);
-      return showStatus("Erreur OpenAI. Vérifie ta clé API ou ton fichier audio.", "error");
+      return showStatus("Erreur Worker/OpenAI. Vérifie ton Worker et ta clé OpenAI dans Cloudflare.", "error");
     }
 
     currentSrtText = text;
@@ -89,7 +90,7 @@ generateBtn.addEventListener("click", async () => {
     showStatus("Sous-titres générés avec succès.", "success");
   } catch (error) {
     console.error(error);
-    showStatus("Erreur : impossible de générer les sous-titres.", "error");
+    showStatus("Erreur : impossible de contacter le Worker Cloudflare.", "error");
   } finally {
     generateBtn.disabled = false;
     generateBtn.textContent = "Générer les sous-titres SRT";
@@ -158,6 +159,13 @@ videoPreview.addEventListener("play", startOverlayLoop);
 videoPreview.addEventListener("pause", updateSubtitleOverlay);
 videoPreview.addEventListener("seeked", updateSubtitleOverlay);
 videoPreview.addEventListener("timeupdate", updateSubtitleOverlay);
+
+function normalizeWorkerUrl(url) {
+  if (!url) return "";
+  const clean = url.trim().replace(/\/+$/, "");
+  if (!clean.startsWith("https://")) return "";
+  return clean;
+}
 
 function createVideoSubtitles(srtText) {
   if (!videoPreview.src) return;
