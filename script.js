@@ -36,6 +36,11 @@ let finalUrl = null;
 let finalBlob = null;
 let subtitleCues = [];
 let exportRunning = false;
+let drawFrameId = null;
+
+hiddenVideo.muted = true;
+hiddenVideo.playsInline = true;
+hiddenVideo.preload = "metadata";
 
 const savedWorker = localStorage.getItem("srt_app_worker_url");
 if (savedWorker) workerUrl.value = savedWorker;
@@ -76,6 +81,7 @@ videoFile.addEventListener("change", () => {
   if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
   videoObjectUrl = URL.createObjectURL(selectedVideo);
   hiddenVideo.src = videoObjectUrl;
+  hiddenVideo.muted = true;
   hiddenVideo.load();
   showMessage("Vidéo prête. Elle reste en local pour l’export sous-titré.", "success");
 });
@@ -168,11 +174,12 @@ async function exportByRecordingPreview() {
     exportRunning = true;
     lockUi(true);
     progressBox.classList.remove("hidden");
-    showMessage("Export local en cours. La vidéo est lue puis enregistrée avec les sous-titres.", "loading");
-    setProgress(0, "Préparation de la lecture...");
+    setProgress(1, "Démarrage de l’export...");
+    showMessage("Export lancé. Si Android demande une autorisation de lecture, accepte.", "loading");
 
     await prepareVideo(hiddenVideo);
     setupCanvasSize(hiddenVideo);
+    drawOneFrame();
 
     const canvasStream = exportCanvas.captureStream(EXPORT_FPS);
     let mixedStream = canvasStream;
@@ -199,15 +206,23 @@ async function exportByRecordingPreview() {
       recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
     });
 
+    hiddenVideo.pause();
     hiddenVideo.currentTime = 0;
-    hiddenVideo.muted = false;
-    await hiddenVideo.play();
+    hiddenVideo.muted = true;
+
+    await waitForSeek(hiddenVideo);
 
     recorder.start(1000);
     drawLoop();
 
-    await new Promise(resolve => hiddenVideo.onended = resolve);
-    recorder.stop();
+    const playPromise = hiddenVideo.play();
+    if (playPromise) await playPromise;
+
+    await new Promise(resolve => {
+      hiddenVideo.onended = resolve;
+    });
+
+    if (recorder.state !== "inactive") recorder.stop();
     await done;
 
     finalBlob = new Blob(chunks, { type: mimeType || "video/webm" });
@@ -220,9 +235,10 @@ async function exportByRecordingPreview() {
     showMessage(mimeType.includes("mp4") ? `MP4 prêt : ${formatMo(finalBlob.size)}.` : `Export WebM prêt : ${formatMo(finalBlob.size)}. Ton téléphone ne permet pas l’enregistrement MP4 direct.`, "success");
   } catch (error) {
     console.error(error);
-    showMessage("Erreur pendant l’export local. Essaie Mobile léger ou une vidéo moins longue.", "error");
+    showMessage(`Export bloqué : ${error.message || "Android n’a pas lancé la lecture."}`, "error");
     setProgress(0, "Échec.");
   } finally {
+    if (drawFrameId) cancelAnimationFrame(drawFrameId);
     hiddenVideo.pause();
     exportRunning = false;
     lockUi(false);
@@ -231,6 +247,13 @@ async function exportByRecordingPreview() {
 
 function drawLoop() {
   if (!exportRunning || hiddenVideo.ended || hiddenVideo.paused) return;
+  drawOneFrame();
+  const percent = hiddenVideo.duration ? Math.min(99, Math.round((hiddenVideo.currentTime / hiddenVideo.duration) * 100)) : 0;
+  setProgress(percent, "Enregistrement local en cours...");
+  drawFrameId = requestAnimationFrame(drawLoop);
+}
+
+function drawOneFrame() {
   const ctx = exportCanvas.getContext("2d", { alpha: false });
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
@@ -238,9 +261,6 @@ function drawLoop() {
   ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
   drawVideoContain(ctx, hiddenVideo, exportCanvas.width, exportCanvas.height);
   drawSubtitle(ctx, getSubtitleAt(hiddenVideo.currentTime));
-  const percent = hiddenVideo.duration ? Math.min(99, Math.round((hiddenVideo.currentTime / hiddenVideo.duration) * 100)) : 0;
-  setProgress(percent, "Enregistrement local en cours...");
-  requestAnimationFrame(drawLoop);
 }
 
 function drawVideoContain(ctx, video, canvasW, canvasH) {
@@ -325,9 +345,16 @@ function getRecorderMimeType() {
 
 function prepareVideo(video) {
   return new Promise((resolve, reject) => {
-    if (video.readyState >= 1) return resolve();
+    if (video.readyState >= 1 && video.videoWidth) return resolve();
     video.onloadedmetadata = () => resolve();
     video.onerror = () => reject(new Error("Impossible de lire la vidéo"));
+  });
+}
+
+function waitForSeek(video) {
+  return new Promise(resolve => {
+    if (!video.seeking) return resolve();
+    video.onseeked = () => resolve();
   });
 }
 
@@ -443,6 +470,7 @@ function lockUi(locked) {
 }
 
 function resetDownload() {
+  if (drawFrameId) cancelAnimationFrame(drawFrameId);
   if (finalUrl) URL.revokeObjectURL(finalUrl);
   finalUrl = null;
   finalBlob = null;
