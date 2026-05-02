@@ -4,34 +4,34 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sous-titres IA</title>
-  <link rel="stylesheet" href="style.css?v=20260501-2145" />
+  <link rel="stylesheet" href="style.css?v=20260502-0808" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
       <h1>Sous-titres IA</h1>
-      <p>Ajoute un audio et une vidéo. Le Worker génère les sous-titres, puis tu choisis SRT, Render MP4 ou export navigateur rapide.</p>
+      <p>Ajoute un audio et une vidéo. Le Worker génère les sous-titres, puis tu peux télécharger l’aperçu propre avec les sous-titres visibles.</p>
     </header>
 
     <section class="card qualityCard">
-      <h2>Mode conseillé : qualité maximale</h2>
+      <h2>Mode conseillé : aperçu propre</h2>
       <p>
-        L’aperçu utilise ton MP4 original, donc la qualité reste parfaite. Pour ne pas dégrader la vidéo,
-        télécharge le SRT ou utilise Render FFmpeg pour créer un vrai MP4.
+        L’aperçu utilise ton MP4 original, donc le rendu est propre. Pour sauvegarder ce rendu, utilise le bouton
+        “Télécharger l’aperçu avec sous-titres”.
       </p>
       <div class="qualitySteps">
         <div>1. Génère le SRT</div>
         <div>2. Vérifie l’aperçu</div>
-        <div>3. Exporte via Render FFmpeg</div>
-        <div>4. Télécharge le MP4 final</div>
+        <div>3. Télécharge l’aperçu sous-titré</div>
+        <div>4. Retrouve le fichier dans Téléchargements</div>
       </div>
     </section>
 
     <section class="card warning">
-      <h2>Export direct navigateur</h2>
+      <h2>Important</h2>
       <p>
-        L’export local navigateur est remis en mode simple. Il sert seulement à dépanner. Pour la vraie qualité MP4, utilise Render.
+        Cette méthode filme l’aperçu affiché dans l’app. Elle est plus adaptée sur téléphone que Render pour les très grosses vidéos.
       </p>
     </section>
 
@@ -54,7 +54,7 @@
         <p class="info">Sur téléphone, l’app compresse en audio WebM léger pour passer sous la limite des 25 Mo.</p>
       </div>
 
-      <label for="videoFile">Vidéo MP4 originale pour l’aperçu et Render</label>
+      <label for="videoFile">Vidéo MP4 originale pour l’aperçu</label>
       <input id="videoFile" type="file" accept="video/*" />
 
       <button id="loadVideoBtn" class="btn">Charger la vidéo originale</button>
@@ -93,44 +93,45 @@
     </section>
 
     <section class="card qualityCard">
-      <h2>6. Export SRT qualité maximale</h2>
+      <h2>6. Export SRT</h2>
       <p>
-        Télécharge ce SRT et garde ta vidéo MP4 originale. C’est la méthode la plus sûre pour éviter toute perte de qualité.
+        Tu peux aussi télécharger le SRT seul pour le garder ou l’utiliser ailleurs.
       </p>
       <textarea id="srtOutput" placeholder="Le texte SRT apparaîtra ici..."></textarea>
       <div class="actions">
         <button id="copyBtn" class="btn secondary">Copier le SRT</button>
-        <button id="downloadBtn" class="btn primary">Télécharger le SRT pour CapCut / VN</button>
+        <button id="downloadBtn" class="btn primary">Télécharger le SRT</button>
       </div>
     </section>
 
     <section class="card qualityCard">
-      <h2>7. Export MP4 Render FFmpeg</h2>
+      <h2>7. Télécharger l’aperçu avec sous-titres</h2>
       <p>
-        Cette option envoie la vidéo originale + le SRT à Render. Les gros fichiers sont envoyés automatiquement par fragments.
+        L’app capture uniquement la vidéo affichée dans l’aperçu avec les sous-titres visibles, puis sauvegarde le fichier dans ton téléphone.
+      </p>
+      <button id="burnBtn" class="btn primary">Télécharger l’aperçu avec sous-titres</button>
+      <progress id="exportProgress" value="0" max="100"></progress>
+      <a id="downloadVideoLink" class="downloadLink" href="#" download="apercu-sous-titre.webm">Ouvrir / télécharger la vidéo de l’aperçu</a>
+    </section>
+
+    <section class="card exportCard warningExport">
+      <h2>8. Render FFmpeg</h2>
+      <p class="info">
+        Option secondaire. Pour les très grosses vidéos, privilégie le téléchargement de l’aperçu.
       </p>
       <label for="renderUrl">URL Render backend</label>
       <input id="renderUrl" type="url" value="https://srt-sous-titres.onrender.com" autocomplete="off" />
       <button id="saveRenderBtn" class="btn secondary">Sauvegarder le lien Render</button>
-      <button id="renderExportBtn" class="btn primary">Créer MP4 avec Render FFmpeg</button>
+      <button id="renderExportBtn" class="btn secondary">Créer MP4 avec Render FFmpeg</button>
       <div id="renderStatus" class="status">Render en attente.</div>
       <a id="renderDownloadLink" class="downloadLink" href="#" download="video-sous-titree-render.mp4">Télécharger le MP4 Render</a>
     </section>
-
-    <section class="card exportCard warningExport">
-      <h2>8. Option dépannage navigateur</h2>
-      <p class="info">
-        Cette option locale est revenue au mode simple d’avant. Elle peut dégrader la qualité car le navigateur réenregistre en WebM.
-      </p>
-      <button id="burnBtn" class="btn secondary">Créer une vidéo sous-titrée rapide</button>
-      <progress id="exportProgress" value="0" max="100"></progress>
-      <a id="downloadVideoLink" class="downloadLink" href="#" download="video-sous-titree.webm">Télécharger la vidéo sous-titrée</a>
-    </section>
   </main>
 
-  <script src="render-url-fix.js?v=20260501-2145"></script>
-  <script src="script.js?v=20260501-2145"></script>
-  <script src="render-chunk-client.js?v=20260501-2145"></script>
-  <script src="download-fix.js?v=20260501-2145"></script>
+  <script src="render-url-fix.js?v=20260502-0808"></script>
+  <script src="script.js?v=20260502-0808"></script>
+  <script src="render-chunk-client.js?v=20260502-0808"></script>
+  <script src="preview-download.js?v=20260502-0808"></script>
+  <script src="download-fix.js?v=20260502-0808"></script>
 </body>
 </html>
