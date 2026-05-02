@@ -22,18 +22,24 @@ const progressText = document.getElementById("progressText");
 const progressPercent = document.getElementById("progressPercent");
 const progressBar = document.getElementById("progressBar");
 const downloadVideoBtn = document.getElementById("downloadVideoBtn");
+const saveVideoBtn = document.getElementById("saveVideoBtn");
+const shareVideoBtn = document.getElementById("shareVideoBtn");
 const downloadsBox = document.getElementById("downloadsBox");
 const message = document.getElementById("message");
 const hiddenVideo = document.getElementById("hiddenVideo");
+const resultBox = document.getElementById("resultBox");
+const resultVideo = document.getElementById("resultVideo");
 const exportCanvas = document.getElementById("exportCanvas");
 
 const API_MAX_SIZE = 25 * 1024 * 1024;
 const EXPORT_FPS = 30;
+const OUTPUT_FILE_NAME = "video-sous-titree-ultra-fluide.webm";
 
 let selectedVideo = null;
 let selectedApiAudio = null;
 let videoObjectUrl = null;
 let localUrl = null;
+let finalBlob = null;
 let subtitleCues = [];
 let exportRunning = false;
 let drawFrameId = null;
@@ -84,6 +90,8 @@ videoFile.addEventListener("change", () => {
 srtInput.addEventListener("input", validateSrt);
 fontSize.addEventListener("input", () => fontSizeValue.textContent = fontSize.value);
 startBtn.addEventListener("click", exportOneLocalVideo);
+saveVideoBtn.addEventListener("click", saveFinalVideoToPhone);
+shareVideoBtn.addEventListener("click", shareFinalVideo);
 
 pasteBtn.addEventListener("click", async () => {
   try {
@@ -158,10 +166,10 @@ async function exportOneLocalVideo() {
     if (!duration || !Number.isFinite(duration)) throw new Error("Durée vidéo introuvable.");
 
     const blob = await recordFullVideo(duration);
-    const fixedBlob = await fixDurationIfNeeded(blob, duration * 1000);
-    localBlobReady(fixedBlob, "video-sous-titree-ultra-fluide.webm");
+    finalBlob = await fixDurationIfNeeded(blob, duration * 1000);
+    prepareResultPreview(finalBlob, OUTPUT_FILE_NAME);
     setProgress(100, "Vidéo terminée.");
-    showMessage(`Vidéo prête. Appuie sur “Télécharger la vidéo” : ${formatMo(fixedBlob.size)}.`, "success");
+    showMessage(`Vidéo prête : ${formatMo(finalBlob.size)}. Regarde le résultat puis enregistre.`, "success");
   } catch (error) {
     console.error(error);
     showMessage(`Erreur export : ${error.message || "capture impossible."}`, "error");
@@ -251,6 +259,56 @@ async function fixDurationIfNeeded(blob, durationMs) {
     }
   }
   return blob;
+}
+
+function prepareResultPreview(blob, filename) {
+  if (localUrl) URL.revokeObjectURL(localUrl);
+  localUrl = URL.createObjectURL(blob);
+  resultVideo.src = localUrl;
+  resultVideo.load();
+  resultBox.classList.remove("hidden");
+  saveVideoBtn.classList.remove("hidden");
+  shareVideoBtn.classList.remove("hidden");
+  downloadVideoBtn.href = localUrl;
+  downloadVideoBtn.download = filename;
+}
+
+async function saveFinalVideoToPhone() {
+  if (!finalBlob) return showMessage("Aucune vidéo prête à enregistrer.", "error");
+
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: OUTPUT_FILE_NAME,
+        types: [{ description: "Vidéo WebM", accept: { "video/webm": [".webm"] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(finalBlob);
+      await writable.close();
+      return showMessage("Vidéo enregistrée sur le téléphone.", "success");
+    } catch (error) {
+      console.warn("Enregistrement manuel annulé", error);
+    }
+  }
+
+  triggerDownload(finalBlob, OUTPUT_FILE_NAME);
+  showMessage("Téléchargement lancé. Regarde dans le dossier Téléchargements.", "success");
+}
+
+async function shareFinalVideo() {
+  if (!finalBlob) return showMessage("Aucune vidéo prête à partager.", "error");
+
+  const file = new File([finalBlob], OUTPUT_FILE_NAME, { type: finalBlob.type || "video/webm" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: "Vidéo sous-titrée" });
+      return showMessage("Partage ouvert.", "success");
+    } catch (error) {
+      return showMessage("Partage annulé.", "warning");
+    }
+  }
+
+  await saveFinalVideoToPhone();
 }
 
 function drawOneFrame() {
@@ -460,18 +518,15 @@ function resetDownload() {
   stopExportLoop();
   if (localUrl) URL.revokeObjectURL(localUrl);
   localUrl = null;
+  finalBlob = null;
   downloadsBox.innerHTML = "";
+  resultVideo.removeAttribute("src");
+  resultVideo.load();
+  resultBox.classList.add("hidden");
+  saveVideoBtn.classList.add("hidden");
+  shareVideoBtn.classList.add("hidden");
   downloadVideoBtn.href = "#";
-  downloadVideoBtn.classList.add("hidden");
   setProgress(0, "Préparation...");
-}
-
-function localBlobReady(blob, filename) {
-  localUrl = URL.createObjectURL(blob);
-  downloadVideoBtn.href = localUrl;
-  downloadVideoBtn.download = filename;
-  downloadVideoBtn.textContent = `Télécharger la vidéo - ${formatMo(blob.size)}`;
-  downloadVideoBtn.classList.remove("hidden");
 }
 
 function triggerDownload(blob, filename) {
