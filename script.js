@@ -2,8 +2,11 @@ import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.15";
 import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
 
 const workerUrl = document.getElementById("workerUrl");
-const audioFile = document.getElementById("audioFile");
-const audioName = document.getElementById("audioName");
+const apiAudioFile = document.getElementById("apiAudioFile");
+const apiVideoFile = document.getElementById("apiVideoFile");
+const apiAudioName = document.getElementById("apiAudioName");
+const apiVideoName = document.getElementById("apiVideoName");
+const useOriginalForApiBtn = document.getElementById("useOriginalForApiBtn");
 const saveWorkerBtn = document.getElementById("saveWorkerBtn");
 const generateSrtBtn = document.getElementById("generateSrtBtn");
 const apiStatus = document.getElementById("apiStatus");
@@ -44,21 +47,44 @@ saveWorkerBtn.addEventListener("click", () => {
   showApiStatus("Worker sauvegardé sur ce téléphone.", "success");
 });
 
-audioFile.addEventListener("change", () => {
-  selectedApiFile = audioFile.files && audioFile.files[0] ? audioFile.files[0] : null;
+apiAudioFile.addEventListener("change", () => {
+  const file = apiAudioFile.files && apiAudioFile.files[0] ? apiAudioFile.files[0] : null;
+  if (!file) return;
 
-  if (!selectedApiFile) {
-    audioName.textContent = "Aucun fichier API sélectionné";
-    return;
-  }
+  selectedApiFile = file;
+  apiAudioName.textContent = `${file.name} - ${(file.size / 1024 / 1024).toFixed(1)} Mo`;
+  apiVideoName.textContent = "Aucune vidéo API sélectionnée";
+  apiVideoFile.value = "";
 
-  audioName.textContent = `${selectedApiFile.name} - ${(selectedApiFile.size / 1024 / 1024).toFixed(1)} Mo`;
-
-  if (selectedApiFile.size > 25 * 1024 * 1024) {
-    showApiStatus("Fichier lourd pour l’API. Essaie un audio plus court si le Worker refuse.", "warning");
+  if (file.size > 25 * 1024 * 1024) {
+    showApiStatus("Audio lourd pour l’API. Si le Worker refuse, coupe ou compresse l’audio avant.", "warning");
   } else {
-    showApiStatus("Fichier prêt pour génération SRT.", "success");
+    showApiStatus("Audio prêt pour génération SRT.", "success");
   }
+});
+
+apiVideoFile.addEventListener("change", () => {
+  const file = apiVideoFile.files && apiVideoFile.files[0] ? apiVideoFile.files[0] : null;
+  if (!file) return;
+
+  selectedApiFile = file;
+  apiVideoName.textContent = `${file.name} - ${(file.size / 1024 / 1024).toFixed(1)} Mo`;
+  apiAudioName.textContent = "Aucun audio sélectionné";
+  apiAudioFile.value = "";
+
+  if (file.size > 25 * 1024 * 1024) {
+    showApiStatus("Vidéo lourde pour l’API. Essaie plutôt un audio extrait ou une vidéo courte.", "warning");
+  } else {
+    showApiStatus("Vidéo prête pour génération SRT.", "success");
+  }
+});
+
+useOriginalForApiBtn.addEventListener("click", () => {
+  if (!selectedVideo) return showApiStatus("Ajoute d’abord une vidéo originale plus bas.", "error");
+  selectedApiFile = selectedVideo;
+  apiVideoName.textContent = `Vidéo originale utilisée : ${selectedVideo.name} - ${(selectedVideo.size / 1024 / 1024).toFixed(1)} Mo`;
+  apiAudioName.textContent = "Aucun audio sélectionné";
+  showApiStatus("La vidéo originale sera utilisée pour générer le SRT.", "success");
 });
 
 generateSrtBtn.addEventListener("click", generateSrtWithApi);
@@ -126,7 +152,7 @@ async function generateSrtWithApi() {
   const url = normalizeUrl(workerUrl.value || localStorage.getItem("srt_app_worker_url") || "");
 
   if (!url) return showApiStatus("Ajoute ton lien Worker Cloudflare.", "error");
-  if (!selectedApiFile) return showApiStatus("Ajoute un audio ou une vidéo pour générer le SRT.", "error");
+  if (!selectedApiFile) return showApiStatus("Choisis un audio, une vidéo API, ou utilise la vidéo originale.", "error");
 
   try {
     localStorage.setItem("srt_app_worker_url", url);
