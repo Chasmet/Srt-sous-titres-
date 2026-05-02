@@ -4,34 +4,33 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sous-titres IA</title>
-  <link rel="stylesheet" href="style.css?v=20260502-0808" />
+  <link rel="stylesheet" href="style.css?v=20260502-0915" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
       <h1>Sous-titres IA</h1>
-      <p>Ajoute un audio et une vidéo. Le Worker génère les sous-titres, puis tu peux télécharger l’aperçu propre avec les sous-titres visibles.</p>
+      <p>Ajoute un audio et une vidéo. Le Worker génère les sous-titres, ou colle directement ton SRT si tu l’as déjà.</p>
     </header>
 
     <section class="card qualityCard">
       <h2>Mode conseillé : aperçu propre</h2>
       <p>
-        L’aperçu utilise ton MP4 original, donc le rendu est propre. Pour sauvegarder ce rendu, utilise le bouton
-        “Télécharger l’aperçu avec sous-titres”.
+        L’aperçu utilise ton MP4 original, donc le rendu est propre. Si tu as déjà un SRT, colle-le directement dans la zone SRT puis appuie sur “Lire le SRT collé”.
       </p>
       <div class="qualitySteps">
-        <div>1. Génère le SRT</div>
-        <div>2. Vérifie l’aperçu</div>
-        <div>3. Télécharge l’aperçu sous-titré</div>
-        <div>4. Retrouve le fichier dans Téléchargements</div>
+        <div>1. Charge la vidéo</div>
+        <div>2. Génère ou colle le SRT</div>
+        <div>3. Vérifie l’aperçu</div>
+        <div>4. Crée 3 vidéos à recoller dans CapCut</div>
       </div>
     </section>
 
     <section class="card warning">
       <h2>Important</h2>
       <p>
-        Cette méthode filme l’aperçu affiché dans l’app. Elle est plus adaptée sur téléphone que Render pour les très grosses vidéos.
+        Si tu as déjà les sous-titres copiés, inutile d’appeler l’API. Colle le SRT et l’application lira les sous-titres dans l’aperçu.
       </p>
     </section>
 
@@ -40,7 +39,7 @@
       <label for="workerUrl">URL du Worker</label>
       <input id="workerUrl" type="url" value="https://srt-openai-worker.skypieachannel.workers.dev" autocomplete="off" />
       <button id="saveWorkerBtn" class="btn secondary">Sauvegarder le lien Worker</button>
-      <p class="info">Le lien est déjà pré-rempli. Appuie juste sur sauvegarder si besoin.</p>
+      <p class="info">Utilise cette partie seulement si tu veux générer les sous-titres avec l’API.</p>
     </section>
 
     <section class="card">
@@ -62,7 +61,7 @@
 
     <section class="card">
       <h2>3. Génération des sous-titres</h2>
-      <button id="generateBtn" class="btn primary">Générer les sous-titres SRT</button>
+      <button id="generateBtn" class="btn primary">Générer les sous-titres SRT avec l’API</button>
       <div id="status" class="status">En attente.</div>
     </section>
 
@@ -93,23 +92,32 @@
     </section>
 
     <section class="card qualityCard">
-      <h2>6. Export SRT</h2>
+      <h2>6. SRT généré ou collé</h2>
       <p>
-        Tu peux aussi télécharger le SRT seul pour le garder ou l’utiliser ailleurs.
+        Colle ici un fichier SRT déjà prêt, puis appuie sur “Lire le SRT collé”. L’application affichera les sous-titres dans l’aperçu sans utiliser l’API.
       </p>
-      <textarea id="srtOutput" placeholder="Le texte SRT apparaîtra ici..."></textarea>
+      <textarea id="srtOutput" placeholder="Colle ton SRT ici, exemple :
+
+1
+00:00:00,000 --> 00:00:02,000
+Premier sous-titre
+
+2
+00:00:02,000 --> 00:00:04,000
+Deuxième sous-titre"></textarea>
       <div class="actions">
+        <button id="applySrtBtn" class="btn primary">Lire le SRT collé dans l’aperçu</button>
         <button id="copyBtn" class="btn secondary">Copier le SRT</button>
-        <button id="downloadBtn" class="btn primary">Télécharger le SRT</button>
+        <button id="downloadBtn" class="btn secondary">Télécharger le SRT</button>
       </div>
     </section>
 
     <section class="card qualityCard">
-      <h2>7. Télécharger l’aperçu avec sous-titres</h2>
+      <h2>7. Télécharger l’aperçu en 3 vidéos</h2>
       <p>
-        L’app capture uniquement la vidéo affichée dans l’aperçu avec les sous-titres visibles, puis sauvegarde le fichier dans ton téléphone.
+        L’app capture uniquement la vidéo affichée dans l’aperçu avec les sous-titres visibles, puis sauvegarde 3 fichiers séparés dans ton téléphone.
       </p>
-      <button id="burnBtn" class="btn primary">Télécharger l’aperçu avec sous-titres</button>
+      <button id="burnBtn" class="btn primary">Créer 3 vidéos de l’aperçu</button>
       <progress id="exportProgress" value="0" max="100"></progress>
       <a id="downloadVideoLink" class="downloadLink" href="#" download="apercu-sous-titre.webm">Ouvrir / télécharger la vidéo de l’aperçu</a>
     </section>
@@ -128,10 +136,10 @@
     </section>
   </main>
 
-  <script src="render-url-fix.js?v=20260502-0808"></script>
-  <script src="script.js?v=20260502-0808"></script>
-  <script src="render-chunk-client.js?v=20260502-0808"></script>
-  <script src="preview-download.js?v=20260502-0808"></script>
-  <script src="download-fix.js?v=20260502-0808"></script>
+  <script src="render-url-fix.js?v=20260502-0915"></script>
+  <script src="script.js?v=20260502-0915"></script>
+  <script src="render-chunk-client.js?v=20260502-0915"></script>
+  <script src="preview-download.js?v=20260502-0915"></script>
+  <script src="download-fix.js?v=20260502-0915"></script>
 </body>
 </html>
