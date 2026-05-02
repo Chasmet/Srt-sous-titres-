@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - sous-titres vidéo</title>
   <meta name="description" content="Application gratuite pour générer un SRT depuis un audio, coller un SRT, puis exporter une vidéo sous-titrée en local." />
-  <link rel="stylesheet" href="style.css?v=20260502-1405" />
+  <link rel="stylesheet" href="style.css?v=20260502-1420" />
 </head>
 <body>
   <main class="app">
@@ -114,6 +114,8 @@ Deuxième sous-titre"></textarea>
       </div>
 
       <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.webm">Télécharger la vidéo finale</a>
+      <button id="convertMp4Btn" class="btn secondary hidden">Convertir en MP4 pour CapCut</button>
+      <a id="downloadMp4Btn" class="downloadLink hidden" href="#" download="video-sous-titree.mp4">Télécharger la vidéo MP4</a>
       <div id="message" class="status">En attente.</div>
     </section>
 
@@ -122,10 +124,10 @@ Deuxième sous-titre"></textarea>
 
     <section class="card warning">
       <h2>À savoir</h2>
-      <p>Pour retrouver la vitesse d’avant, envoie à l’API un audio léger. La grosse vidéo reste en local pour l’export sous-titré.</p>
+      <p>Pour retrouver la vitesse d’avant, envoie à l’API un audio léger. La grosse vidéo reste en local pour l’export sous-titré. Si CapCut ne lit pas le WebM, utilise le bouton de conversion MP4.</p>
     </section>
   </main>
 
-  <script src="script.js?v=20260502-1405"></script>
+  <script src="script.js?v=20260502-1420"></script>
 </body>
 </html>
