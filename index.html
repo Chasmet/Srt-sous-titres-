@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - export local fluide</title>
   <meta name="description" content="Colle ou génère un SRT, puis exporte une vidéo sous-titrée en local sur téléphone." />
-  <link rel="stylesheet" href="style.css?v=20260502-1930" />
+  <link rel="stylesheet" href="style.css?v=20260502-2005" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Mode local fluide</div>
+      <div class="pill">Mode local ultra fluide</div>
       <h1>SRT Studio</h1>
-      <p>Render est retiré. L’application crée maintenant une seule vidéo locale plus fluide.</p>
+      <p>Render est retiré. L’application crée une seule vidéo locale avec un mode plus fluide et un téléchargement manuel.</p>
     </header>
 
     <section class="card strong">
@@ -21,7 +21,7 @@
       <div class="steps">
         <div><span>1</span><p>Charge la vidéo originale.</p></div>
         <div><span>2</span><p>Colle ton SRT ou génère-le avec l’API audio.</p></div>
-        <div><span>3</span><p>Exporte en un seul fichier WebM.</p></div>
+        <div><span>3</span><p>Crée un seul fichier WebM puis télécharge-le.</p></div>
       </div>
     </section>
 
@@ -80,11 +80,11 @@ Deuxième sous-titre"></textarea>
       <label for="qualitySelect">Qualité export local</label>
       <select id="qualitySelect">
         <option value="mobile">Mobile léger - très stable</option>
-        <option value="smooth134" selected>Fluide compatible - conseillé</option>
+        <option value="smooth134" selected>Ultra fluide - conseillé</option>
         <option value="medium">Bonne qualité - plus lourd</option>
         <option value="high">Haute qualité - risque de saccades</option>
       </select>
-      <p class="info">Le mode Fluide compatible privilégie la lecture propre et la compatibilité plutôt que le poids maximum.</p>
+      <p class="info">Ultra fluide baisse un peu la résolution pour éviter les lags sur téléphone.</p>
 
       <label for="formatSelect">Format vidéo</label>
       <select id="formatSelect">
@@ -98,15 +98,15 @@ Deuxième sous-titre"></textarea>
 
     <section class="card exportCard">
       <h2>4. Export local en un seul fichier</h2>
-      <button id="startBtn" class="btn primary">Créer 1 vidéo fluide</button>
+      <button id="startBtn" class="btn primary">Créer 1 vidéo ultra fluide</button>
       <div id="progressBox" class="progressBox hidden">
         <div class="progressTop"><span id="progressText">Préparation...</span><strong id="progressPercent">0%</strong></div>
         <progress id="progressBar" value="0" max="100"></progress>
       </div>
       <div id="downloadsBox" class="actions"></div>
-      <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.webm">Télécharger vidéo locale</a>
+      <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.webm">Télécharger la vidéo</a>
       <div id="message" class="status">En attente.</div>
-      <p class="info">Le fichier sort en WebM local. Convertis-le ensuite en MP4 avec ton convertisseur si besoin.</p>
+      <p class="info">Le téléchargement ne démarre plus automatiquement : tu appuies sur le bouton quand la vidéo est prête.</p>
     </section>
 
     <section class="card previewCard">
@@ -119,10 +119,10 @@ Deuxième sous-titre"></textarea>
 
     <section class="card warning">
       <h2>À savoir</h2>
-      <p>Tout est local. Aucun Render. Une seule vidéo est créée pour éviter les coupures entre parties.</p>
+      <p>Tout est local. Aucun Render. Si CapCut refuse le WebM, convertis-le en MP4 ensuite.</p>
     </section>
   </main>
   <script src="https://unpkg.com/fix-webm-duration@1.0.6/fix-webm-duration.js"></script>
-  <script src="script.js?v=20260502-1930"></script>
+  <script src="script.js?v=20260502-2005"></script>
 </body>
 </html>
