@@ -181,6 +181,7 @@ async function exportSplitLocalVideos() {
       const url = URL.createObjectURL(blob);
       partUrls.push(url);
       addDownloadLink(url, `video-sous-titree-partie-${i + 1}.webm`, `Télécharger partie ${i + 1}/3 - ${formatMo(blob.size)}`);
+      downloadBlob(blob, `video-sous-titree-partie-${i + 1}.webm`);
       setProgress(Math.round(((i + 1) / SPLIT_COUNT) * 100), `Partie ${i + 1}/3 terminée.`);
       await sleep(700);
     }
@@ -372,6 +373,7 @@ function setupCanvasSize(video) {
 
 function getMaxSideForQuality() {
   if (qualitySelect.value === "high") return 1920;
+  if (qualitySelect.value === "smooth134") return 1440;
   if (qualitySelect.value === "medium") return 1280;
   return 720;
 }
@@ -382,13 +384,14 @@ function setCanvas(canvas, w, h) {
 }
 
 function getVideoBitrate() {
-  if (qualitySelect.value === "high") return 14000000;
+  if (qualitySelect.value === "high") return 18000000;
+  if (qualitySelect.value === "smooth134") return 12000000;
   if (qualitySelect.value === "medium") return 8500000;
   return 3500000;
 }
 
 function getRecorderMimeType() {
-  const types = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
+  const types = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
   return types.find(type => MediaRecorder.isTypeSupported(type)) || "video/webm";
 }
 
