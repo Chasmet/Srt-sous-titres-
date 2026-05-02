@@ -5,11 +5,6 @@ const saveWorkerBtn = document.getElementById("saveWorkerBtn");
 const generateSrtBtn = document.getElementById("generateSrtBtn");
 const apiStatus = document.getElementById("apiStatus");
 
-const renderUrl = document.getElementById("renderUrl");
-const saveRenderBtn = document.getElementById("saveRenderBtn");
-const testRenderBtn = document.getElementById("testRenderBtn");
-const renderStatus = document.getElementById("renderStatus");
-
 const videoFile = document.getElementById("videoFile");
 const videoName = document.getElementById("videoName");
 const srtInput = document.getElementById("srtInput");
@@ -22,29 +17,29 @@ const fontSizeValue = document.getElementById("fontSizeValue");
 const qualitySelect = document.getElementById("qualitySelect");
 const formatSelect = document.getElementById("formatSelect");
 const startBtn = document.getElementById("startBtn");
-const finalMp4Btn = document.getElementById("finalMp4Btn");
+const splitExportBtn = document.getElementById("splitExportBtn");
 const progressBox = document.getElementById("progressBox");
 const progressText = document.getElementById("progressText");
 const progressPercent = document.getElementById("progressPercent");
 const progressBar = document.getElementById("progressBar");
 const downloadVideoBtn = document.getElementById("downloadVideoBtn");
-const downloadFinalMp4Btn = document.getElementById("downloadFinalMp4Btn");
+const downloadsBox = document.getElementById("downloadsBox");
 const message = document.getElementById("message");
 const hiddenVideo = document.getElementById("hiddenVideo");
 const exportCanvas = document.getElementById("exportCanvas");
 
 const API_MAX_SIZE = 25 * 1024 * 1024;
 const EXPORT_FPS = 30;
+const SPLIT_COUNT = 3;
 
 let selectedVideo = null;
 let selectedApiAudio = null;
 let videoObjectUrl = null;
 let localUrl = null;
-let localBlob = null;
-let finalMp4Url = null;
 let subtitleCues = [];
 let exportRunning = false;
 let drawFrameId = null;
+let partUrls = [];
 
 hiddenVideo.muted = true;
 hiddenVideo.playsInline = true;
@@ -53,36 +48,12 @@ hiddenVideo.preload = "metadata";
 const savedWorker = localStorage.getItem("srt_app_worker_url");
 if (savedWorker) workerUrl.value = savedWorker;
 
-const savedRender = localStorage.getItem("srt_app_render_url");
-if (savedRender) renderUrl.value = savedRender;
-
 saveWorkerBtn.addEventListener("click", () => {
   const url = normalizeUrl(workerUrl.value);
   if (!url) return showApiStatus("Lien Worker invalide. Il doit commencer par https://", "error");
   localStorage.setItem("srt_app_worker_url", url);
   workerUrl.value = url;
   showApiStatus("Worker sauvegardé sur ce téléphone.", "success");
-});
-
-saveRenderBtn.addEventListener("click", () => {
-  const url = normalizeUrl(renderUrl.value);
-  if (!url) return showRenderStatus("Lien Render invalide. Il doit commencer par https://", "error");
-  localStorage.setItem("srt_app_render_url", url);
-  renderUrl.value = url;
-  showRenderStatus("Render sauvegardé sur ce téléphone.", "success");
-});
-
-testRenderBtn.addEventListener("click", async () => {
-  const url = normalizeUrl(renderUrl.value || localStorage.getItem("srt_app_render_url") || "");
-  if (!url) return showRenderStatus("Ajoute d’abord le lien Render.", "error");
-  try {
-    showRenderStatus("Test Render en cours...", "loading");
-    const response = await fetch(`${url}/health`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    showRenderStatus("Render répond correctement.", "success");
-  } catch (error) {
-    showRenderStatus("Render ne répond pas encore. Vérifie le lien ou attends le réveil du service.", "error");
-  }
 });
 
 apiAudioFile.addEventListener("change", () => {
@@ -106,25 +77,28 @@ videoFile.addEventListener("change", () => {
     showMessage("Aucune vidéo sélectionnée.", "");
     return;
   }
+
   videoName.textContent = `${selectedVideo.name} - ${formatMo(selectedVideo.size)}`;
+
   if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
   videoObjectUrl = URL.createObjectURL(selectedVideo);
   hiddenVideo.src = videoObjectUrl;
   hiddenVideo.muted = true;
   hiddenVideo.load();
-  showMessage("Vidéo prête. Elle reste visible pendant l’export.", "success");
+
+  showMessage("Vidéo prête. Tu peux coller le SRT puis exporter en local.", "success");
 });
 
 srtInput.addEventListener("input", validateSrt);
 fontSize.addEventListener("input", () => fontSizeValue.textContent = fontSize.value);
-startBtn.addEventListener("click", () => exportByRecordingPreview(false));
-finalMp4Btn.addEventListener("click", () => exportByRecordingPreview(true));
+startBtn.addEventListener("click", () => exportOneLocalVideo());
+splitExportBtn.addEventListener("click", () => exportSplitLocalVideos());
 
 pasteBtn.addEventListener("click", async () => {
   try {
     srtInput.value = cleanSrt(await navigator.clipboard.readText());
     validateSrt();
-    showMessage("SRT collé.", "success");
+    showMessage("SRT collé. Tu peux lancer l’export local.", "success");
   } catch (error) {
     showMessage("Collage automatique bloqué. Colle le SRT manuellement dans la zone.", "error");
   }
@@ -161,12 +135,16 @@ async function generateSrtWithApi() {
     generateSrtBtn.disabled = true;
     generateSrtBtn.textContent = "Génération en cours...";
     showApiStatus("Appel au générateur SRT audio en cours...", "loading");
+
     const formData = new FormData();
     formData.append("file", selectedApiAudio, selectedApiAudio.name || "audio.mp3");
     formData.append("language", "fr");
+
     const response = await fetch(url, { method: "POST", body: formData });
     const text = await response.text();
+
     if (!response.ok) return showApiStatus(`Erreur API ${response.status}.`, "error");
+
     srtInput.value = cleanSrt(text);
     validateSrt();
     showApiStatus("SRT généré depuis l’audio.", "success");
@@ -178,106 +156,152 @@ async function generateSrtWithApi() {
   }
 }
 
-async function exportByRecordingPreview(sendToRender) {
-  resetDownloads();
-  if (exportRunning) return;
-  if (!selectedVideo || !videoObjectUrl) return showMessage("Ajoute d’abord une vidéo.", "error");
-  if (!validateSrt()) return showMessage("Colle ou génère un SRT valide avant de lancer.", "error");
-  if (!window.MediaRecorder) return showMessage("Ton navigateur ne supporte pas l’export local vidéo.", "error");
+async function exportOneLocalVideo() {
+  await exportLocalPart({ partIndex: 0, totalParts: 1, startRatio: 0, endRatio: 1, resetBefore: true });
+}
 
-  const renderBaseUrl = normalizeUrl(renderUrl.value || localStorage.getItem("srt_app_render_url") || "");
-  if (sendToRender && !renderBaseUrl) return showMessage("Ajoute le lien Render avant l’export MP4 final.", "error");
-
-  subtitleCues = parseSrt(cleanSrt(srtInput.value));
-  if (!subtitleCues.length) return showMessage("SRT illisible. Vérifie les timecodes.", "error");
+async function exportSplitLocalVideos() {
+  if (!prepareExport()) return;
 
   try {
+    resetDownloads();
     exportRunning = true;
     lockUi(true);
     progressBox.classList.remove("hidden");
-    setProgress(1, "Préparation de l’export local...");
-    showMessage(sendToRender ? "Étape 1/2 : création locale de la vidéo sous-titrée." : "Export local en cours.", "loading");
+    showMessage("Export local en 3 parties. Garde l’écran allumé.", "loading");
 
     await prepareVideo(hiddenVideo);
-    setupCanvasSize(hiddenVideo);
-    await forceVideoToStart(hiddenVideo);
-    drawOneFrame();
+    const duration = hiddenVideo.duration;
+    if (!duration || !Number.isFinite(duration)) throw new Error("Durée vidéo introuvable.");
 
-    const canvasStream = exportCanvas.captureStream(EXPORT_FPS);
-    let mixedStream = canvasStream;
-    try {
-      const audioStream = hiddenVideo.captureStream ? hiddenVideo.captureStream() : hiddenVideo.mozCaptureStream?.();
-      const audioTracks = audioStream ? audioStream.getAudioTracks() : [];
-      if (audioTracks.length) mixedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
-    } catch (error) {
-      console.warn("Audio non capturé", error);
+    for (let i = 0; i < SPLIT_COUNT; i++) {
+      const startRatio = i / SPLIT_COUNT;
+      const endRatio = (i + 1) / SPLIT_COUNT;
+      const blob = await recordPart(startRatio * duration, endRatio * duration, i, SPLIT_COUNT);
+      const url = URL.createObjectURL(blob);
+      partUrls.push(url);
+      addDownloadLink(url, `video-sous-titree-partie-${i + 1}.webm`, `Télécharger partie ${i + 1}/3 - ${formatMo(blob.size)}`);
+      setProgress(Math.round(((i + 1) / SPLIT_COUNT) * 100), `Partie ${i + 1}/3 terminée.`);
+      await sleep(700);
     }
 
-    const mimeType = getRecorderMimeType();
-    const recorder = new MediaRecorder(mixedStream, { mimeType, videoBitsPerSecond: getVideoBitrate() });
-    const chunks = [];
-    recorder.ondataavailable = event => { if (event.data && event.data.size > 0) chunks.push(event.data); };
-    const done = new Promise((resolve, reject) => {
-      recorder.onstop = resolve;
-      recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
-    });
-
-    recorder.start(1000);
-    await hiddenVideo.play();
-    drawLoop();
-    await new Promise(resolve => { hiddenVideo.onended = resolve; });
-    if (recorder.state !== "inactive") recorder.stop();
-    await done;
-
-    localBlob = new Blob(chunks, { type: mimeType || "video/webm" });
-    localUrl = URL.createObjectURL(localBlob);
-    downloadVideoBtn.href = localUrl;
-    downloadVideoBtn.download = mimeType.includes("mp4") ? "video-temporaire.mp4" : "video-temporaire.webm";
-    downloadVideoBtn.classList.remove("hidden");
-
-    if (!sendToRender) {
-      setProgress(100, "Export local terminé.");
-      showMessage(`Vidéo temporaire prête : ${formatMo(localBlob.size)}.`, "success");
-      return;
-    }
-
-    setProgress(50, "Envoi à Render...");
-    showMessage("Étape 2/2 : envoi à Render pour créer un vrai MP4 propre.", "loading");
-    const finalBlob = await uploadToRender(renderBaseUrl, localBlob);
-    finalMp4Url = URL.createObjectURL(finalBlob);
-    downloadFinalMp4Btn.href = finalMp4Url;
-    downloadFinalMp4Btn.classList.remove("hidden");
-    setProgress(100, "MP4 final prêt.");
-    showMessage(`MP4 final compatible prêt : ${formatMo(finalBlob.size)}.`, "success");
+    showMessage("Les 3 parties sont prêtes. Télécharge-les puis colle-les dans CapCut.", "success");
   } catch (error) {
     console.error(error);
-    showMessage(`Erreur export : ${error.message || "traitement impossible."}`, "error");
-    setProgress(0, "Échec.");
+    showMessage(`Erreur export : ${error.message || "capture impossible."}`, "error");
   } finally {
-    if (drawFrameId) cancelAnimationFrame(drawFrameId);
+    stopExportLoop();
     hiddenVideo.pause();
     exportRunning = false;
     lockUi(false);
   }
 }
 
-async function uploadToRender(baseUrl, blob) {
-  const formData = new FormData();
-  formData.append("video", blob, "video-temporaire.webm");
-  const response = await fetch(`${baseUrl}/api/finalize-mp4`, { method: "POST", body: formData });
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Render erreur ${response.status}${text ? ` : ${text.slice(0, 120)}` : ""}`);
+async function exportLocalPart({ partIndex, totalParts, startRatio, endRatio, resetBefore }) {
+  if (!prepareExport()) return;
+
+  try {
+    if (resetBefore) resetDownloads();
+    exportRunning = true;
+    lockUi(true);
+    progressBox.classList.remove("hidden");
+    showMessage("Export local en cours. Garde l’écran allumé.", "loading");
+
+    await prepareVideo(hiddenVideo);
+    const duration = hiddenVideo.duration;
+    if (!duration || !Number.isFinite(duration)) throw new Error("Durée vidéo introuvable.");
+
+    const blob = await recordPart(startRatio * duration, endRatio * duration, partIndex, totalParts);
+    localBlobReady(blob, totalParts === 1 ? "video-sous-titree.webm" : `video-sous-titree-partie-${partIndex + 1}.webm`);
+    setProgress(100, "Export local terminé.");
+    showMessage(`Vidéo locale prête : ${formatMo(blob.size)}.`, "success");
+  } catch (error) {
+    console.error(error);
+    showMessage(`Erreur export : ${error.message || "capture impossible."}`, "error");
+  } finally {
+    stopExportLoop();
+    hiddenVideo.pause();
+    exportRunning = false;
+    lockUi(false);
   }
-  return await response.blob();
 }
 
-function drawLoop() {
-  if (!exportRunning || hiddenVideo.ended) return;
+function prepareExport() {
+  if (exportRunning) return false;
+  if (!selectedVideo || !videoObjectUrl) {
+    showMessage("Ajoute d’abord une vidéo.", "error");
+    return false;
+  }
+  if (!validateSrt()) {
+    showMessage("Colle ou génère un SRT valide avant de lancer.", "error");
+    return false;
+  }
+  if (!window.MediaRecorder) {
+    showMessage("Ton navigateur ne supporte pas l’export local vidéo.", "error");
+    return false;
+  }
+
+  subtitleCues = parseSrt(cleanSrt(srtInput.value));
+  if (!subtitleCues.length) {
+    showMessage("SRT illisible. Vérifie les timecodes.", "error");
+    return false;
+  }
+
+  return true;
+}
+
+async function recordPart(startSecond, endSecond, partIndex, totalParts) {
+  setupCanvasSize(hiddenVideo);
+  await seekVideo(hiddenVideo, startSecond);
   drawOneFrame();
-  const percent = hiddenVideo.duration ? Math.min(49, Math.max(1, Math.round((hiddenVideo.currentTime / hiddenVideo.duration) * 49))) : 1;
-  setProgress(percent, "Création locale de la vidéo sous-titrée...");
-  drawFrameId = requestAnimationFrame(drawLoop);
+
+  const canvasStream = exportCanvas.captureStream(EXPORT_FPS);
+  let mixedStream = canvasStream;
+
+  try {
+    const audioStream = hiddenVideo.captureStream ? hiddenVideo.captureStream() : hiddenVideo.mozCaptureStream?.();
+    const audioTracks = audioStream ? audioStream.getAudioTracks() : [];
+    if (audioTracks.length) mixedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+  } catch (error) {
+    console.warn("Audio non capturé", error);
+  }
+
+  const mimeType = getRecorderMimeType();
+  const recorder = new MediaRecorder(mixedStream, { mimeType, videoBitsPerSecond: getVideoBitrate(), audioBitsPerSecond: 192000 });
+  const chunks = [];
+
+  recorder.ondataavailable = event => {
+    if (event.data && event.data.size > 0) chunks.push(event.data);
+  };
+
+  const done = new Promise((resolve, reject) => {
+    recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType || "video/webm" }));
+    recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
+  });
+
+  recorder.start(1000);
+  await hiddenVideo.play();
+
+  await new Promise(resolve => {
+    const draw = () => {
+      drawOneFrame();
+      const partProgress = Math.min(1, Math.max(0, (hiddenVideo.currentTime - startSecond) / Math.max(1, endSecond - startSecond)));
+      const totalProgress = ((partIndex + partProgress) / totalParts) * 100;
+      setProgress(Math.round(totalProgress), totalParts === 1 ? "Création de la vidéo locale..." : `Création partie ${partIndex + 1}/${totalParts}...`);
+
+      if (hiddenVideo.ended || hiddenVideo.currentTime >= endSecond) {
+        resolve();
+        return;
+      }
+      drawFrameId = requestAnimationFrame(draw);
+    };
+    draw();
+  });
+
+  if (recorder.state !== "inactive") recorder.stop();
+  const blob = await done;
+  stopTracks(mixedStream);
+  return blob;
 }
 
 function drawOneFrame() {
@@ -303,39 +327,43 @@ function drawVideoContain(ctx, video, canvasW, canvasH) {
 
 function drawSubtitle(ctx, text) {
   if (!text) return;
+
   const fontPx = Math.max(18, Math.round((Number(fontSize.value) || 30) * (exportCanvas.width / 720)));
-  const padding = Math.round(fontPx * 0.55);
   const maxWidth = Math.round(exportCanvas.width * 0.86);
-  const lines = wrapText(ctx, text, maxWidth, fontPx);
+  const lines = wrapText(ctx, text, maxWidth, fontPx).slice(0, 3);
   const lineHeight = Math.round(fontPx * 1.25);
-  const boxHeight = lines.length * lineHeight + padding * 2;
-  const boxWidth = Math.min(maxWidth + padding * 2, exportCanvas.width * 0.92);
-  const x = (exportCanvas.width - boxWidth) / 2;
-  const y = exportCanvas.height - boxHeight - Math.round(exportCanvas.height * 0.07);
+  const y = exportCanvas.height - (lines.length * lineHeight) - Math.round(exportCanvas.height * 0.08);
+
   ctx.font = `900 ${fontPx}px Arial, sans-serif`;
   ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "rgba(0,0,0,0.58)";
-  roundRect(ctx, x, y, boxWidth, boxHeight, Math.round(fontPx * 0.45));
-  ctx.fill();
-  ctx.lineWidth = Math.max(4, Math.round(fontPx / 6));
+  ctx.textBaseline = "top";
+  ctx.lineWidth = Math.max(5, Math.round(fontPx / 5));
   ctx.strokeStyle = "#000";
   ctx.fillStyle = "#fff";
+  ctx.shadowColor = "rgba(0,0,0,0.9)";
+  ctx.shadowBlur = Math.round(fontPx * 0.15);
+  ctx.shadowOffsetY = Math.round(fontPx * 0.06);
+
   lines.forEach((line, index) => {
-    const textY = y + padding + lineHeight * index + lineHeight / 2;
+    const textY = y + index * lineHeight;
     ctx.strokeText(line, exportCanvas.width / 2, textY);
     ctx.fillText(line, exportCanvas.width / 2, textY);
   });
+
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
 }
 
 function setupCanvasSize(video) {
   const format = formatSelect.value;
   const vw = video.videoWidth || 720;
   const vh = video.videoHeight || 1280;
+
   if (format === "vertical") return setCanvas(exportCanvas, 1080, 1920);
   if (format === "square") return setCanvas(exportCanvas, 1080, 1080);
   if (format === "horizontal") return setCanvas(exportCanvas, 1920, 1080);
   if (format === "mobile720") return vh >= vw ? setCanvas(exportCanvas, 720, 1280) : setCanvas(exportCanvas, 1280, 720);
+
   const maxSide = getMaxSideForQuality();
   const ratio = vw / vh;
   if (vw >= vh) return setCanvas(exportCanvas, maxSide, Math.round(maxSide / ratio));
@@ -360,7 +388,7 @@ function getVideoBitrate() {
 }
 
 function getRecorderMimeType() {
-  const types = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm", "video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4"];
+  const types = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
   return types.find(type => MediaRecorder.isTypeSupported(type)) || "video/webm";
 }
 
@@ -372,22 +400,17 @@ function prepareVideo(video) {
   });
 }
 
-async function forceVideoToStart(video) {
-  video.pause();
-  video.muted = true;
-  await new Promise(resolve => setTimeout(resolve, 120));
-  try { video.currentTime = 0; } catch (error) {}
-  await new Promise(resolve => {
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      video.removeEventListener("seeked", finish);
+function seekVideo(video, time) {
+  return new Promise(resolve => {
+    video.pause();
+    const done = () => {
+      video.removeEventListener("seeked", done);
       clearTimeout(timer);
       resolve();
     };
-    const timer = setTimeout(finish, 900);
-    video.addEventListener("seeked", finish, { once: true });
+    const timer = setTimeout(done, 1000);
+    video.addEventListener("seeked", done, { once: true });
+    try { video.currentTime = Math.max(0, time); } catch (error) { done(); }
   });
 }
 
@@ -419,33 +442,44 @@ function wrapText(ctx, text, maxWidth, fontPx) {
   const words = String(text).split(/\s+/);
   const lines = [];
   let line = "";
+
   words.forEach(word => {
     const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; } else { line = test; }
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
   });
-  if (line) lines.push(line);
-  return lines.slice(0, 3);
-}
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+  if (line) lines.push(line);
+  return lines;
 }
 
 function cleanSrt(text) {
-  return String(text || "").replace(/\r/g, "").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
+  return String(text || "")
+    .replace(/\r/g, "")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
 }
 
 function validateSrt() {
   const srt = cleanSrt(srtInput.value);
-  if (!srt) { srtStatus.textContent = "SRT en attente."; srtStatus.className = "status"; return false; }
+  if (!srt) {
+    srtStatus.textContent = "SRT en attente.";
+    srtStatus.className = "status";
+    return false;
+  }
+
   const valid = /\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}/.test(srt);
-  if (!valid) { srtStatus.textContent = "SRT mal formaté : vérifie les timecodes."; srtStatus.className = "status warning"; return false; }
+  if (!valid) {
+    srtStatus.textContent = "SRT mal formaté : vérifie les timecodes.";
+    srtStatus.className = "status warning";
+    return false;
+  }
+
   const cueCount = (srt.match(/-->/g) || []).length;
   srtStatus.textContent = `SRT valide : ${cueCount} ligne${cueCount > 1 ? "s" : ""} détectée${cueCount > 1 ? "s" : ""}.`;
   srtStatus.className = "status success";
@@ -464,13 +498,21 @@ function setProgress(value, text) {
   progressText.textContent = text;
 }
 
-function showMessage(text, type) { message.textContent = text; message.className = "status"; if (type) message.classList.add(type); }
-function showApiStatus(text, type) { apiStatus.textContent = text; apiStatus.className = "status"; if (type) apiStatus.classList.add(type); }
-function showRenderStatus(text, type) { renderStatus.textContent = text; renderStatus.className = "status"; if (type) renderStatus.classList.add(type); }
+function showMessage(text, type) {
+  message.textContent = text;
+  message.className = "status";
+  if (type) message.classList.add(type);
+}
+
+function showApiStatus(text, type) {
+  apiStatus.textContent = text;
+  apiStatus.className = "status";
+  if (type) apiStatus.classList.add(type);
+}
 
 function lockUi(locked) {
   startBtn.disabled = locked;
-  finalMp4Btn.disabled = locked;
+  splitExportBtn.disabled = locked;
   videoFile.disabled = locked;
   srtInput.disabled = locked;
   pasteBtn.disabled = locked;
@@ -479,22 +521,38 @@ function lockUi(locked) {
   fontSize.disabled = locked;
   qualitySelect.disabled = locked;
   formatSelect.disabled = locked;
-  startBtn.textContent = locked ? "Traitement..." : "Exporter local seulement";
-  finalMp4Btn.textContent = locked ? "Traitement..." : "Exporter MP4 final CapCut / TikTok";
+  startBtn.textContent = locked ? "Traitement..." : "Exporter local en 1 vidéo";
+  splitExportBtn.textContent = locked ? "Traitement..." : "Exporter local en 3 parties";
 }
 
 function resetDownloads() {
-  if (drawFrameId) cancelAnimationFrame(drawFrameId);
+  stopExportLoop();
   if (localUrl) URL.revokeObjectURL(localUrl);
-  if (finalMp4Url) URL.revokeObjectURL(finalMp4Url);
+  partUrls.forEach(url => URL.revokeObjectURL(url));
   localUrl = null;
-  finalMp4Url = null;
-  localBlob = null;
+  partUrls = [];
+  downloadsBox.innerHTML = "";
   downloadVideoBtn.href = "#";
-  downloadFinalMp4Btn.href = "#";
   downloadVideoBtn.classList.add("hidden");
-  downloadFinalMp4Btn.classList.add("hidden");
   setProgress(0, "Préparation...");
+}
+
+function localBlobReady(blob, filename) {
+  localUrl = URL.createObjectURL(blob);
+  downloadVideoBtn.href = localUrl;
+  downloadVideoBtn.download = filename;
+  downloadVideoBtn.textContent = `Télécharger ${filename} - ${formatMo(blob.size)}`;
+  downloadVideoBtn.classList.remove("hidden");
+  downloadBlob(blob, filename);
+}
+
+function addDownloadLink(url, filename, label) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.className = "downloadLink";
+  link.textContent = label;
+  downloadsBox.appendChild(link);
 }
 
 function downloadBlob(blob, filename) {
@@ -505,9 +563,24 @@ function downloadBlob(blob, filename) {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
-function formatMo(bytes) { return `${(bytes / 1024 / 1024).toFixed(1)} Mo`; }
+function stopTracks(stream) {
+  try { stream.getTracks().forEach(track => track.stop()); } catch (e) {}
+}
+
+function stopExportLoop() {
+  if (drawFrameId) cancelAnimationFrame(drawFrameId);
+  drawFrameId = null;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function formatMo(bytes) {
+  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
+}
 
 validateSrt();
