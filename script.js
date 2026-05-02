@@ -112,11 +112,12 @@ normalizeFile.addEventListener("input", loadNormalizeFileFromInput);
 normalizeBtn.addEventListener("click", normalizeExistingVideo);
 
 function loadNormalizeFileFromInput() {
+  showNormalizeStatus("Fichier détecté, chargement de la vidéo...", "loading");
   const file = normalizeFile.files && normalizeFile.files[0] ? normalizeFile.files[0] : null;
   if (!file) {
     selectedNormalizeFile = null;
     normalizeName.textContent = "Aucune vidéo à normaliser";
-    showNormalizeStatus("Aucune vidéo sélectionnée.", "");
+    showNormalizeStatus("Aucune vidéo sélectionnée.", "error");
     return false;
   }
 
@@ -293,6 +294,7 @@ async function exportByRecordingPreview() {
 }
 
 async function normalizeExistingVideo() {
+  showNormalizeStatus("Bouton Normaliser détecté. Vérification du fichier...", "loading");
   resetNormalizedDownload();
   if (normalizeRunning) return;
 
@@ -709,5 +711,8 @@ function downloadBlob(blob, filename) {
 function formatMo(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
 }
+
+window.loadNormalizeFileFromInput = loadNormalizeFileFromInput;
+window.normalizeExistingVideo = normalizeExistingVideo;
 
 validateSrt();
