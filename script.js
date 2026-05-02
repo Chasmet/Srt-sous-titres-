@@ -83,7 +83,7 @@ videoFile.addEventListener("change", () => {
   hiddenVideo.src = videoObjectUrl;
   hiddenVideo.muted = true;
   hiddenVideo.load();
-  showMessage("Vidéo prête. Elle reste en local pour l’export sous-titré.", "success");
+  showMessage("Vidéo prête. Elle reste visible pendant l’export.", "success");
 });
 
 srtInput.addEventListener("input", validateSrt);
@@ -175,10 +175,16 @@ async function exportByRecordingPreview() {
     lockUi(true);
     progressBox.classList.remove("hidden");
     setProgress(1, "Démarrage de l’export...");
-    showMessage("Export lancé. Si Android demande une autorisation de lecture, accepte.", "loading");
+    showMessage("Export en cours. La vidéo doit défiler pendant l’enregistrement.", "loading");
 
     await prepareVideo(hiddenVideo);
     setupCanvasSize(hiddenVideo);
+
+    hiddenVideo.pause();
+    hiddenVideo.currentTime = 0;
+    hiddenVideo.muted = true;
+    await waitForSeek(hiddenVideo);
+
     drawOneFrame();
 
     const canvasStream = exportCanvas.captureStream(EXPORT_FPS);
@@ -206,17 +212,10 @@ async function exportByRecordingPreview() {
       recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
     });
 
-    hiddenVideo.pause();
-    hiddenVideo.currentTime = 0;
-    hiddenVideo.muted = true;
-
-    await waitForSeek(hiddenVideo);
+    await hiddenVideo.play();
 
     recorder.start(1000);
     drawLoop();
-
-    const playPromise = hiddenVideo.play();
-    if (playPromise) await playPromise;
 
     await new Promise(resolve => {
       hiddenVideo.onended = resolve;
@@ -246,9 +245,9 @@ async function exportByRecordingPreview() {
 }
 
 function drawLoop() {
-  if (!exportRunning || hiddenVideo.ended || hiddenVideo.paused) return;
+  if (!exportRunning || hiddenVideo.ended) return;
   drawOneFrame();
-  const percent = hiddenVideo.duration ? Math.min(99, Math.round((hiddenVideo.currentTime / hiddenVideo.duration) * 100)) : 0;
+  const percent = hiddenVideo.duration ? Math.min(99, Math.max(1, Math.round((hiddenVideo.currentTime / hiddenVideo.duration) * 100))) : 1;
   setProgress(percent, "Enregistrement local en cours...");
   drawFrameId = requestAnimationFrame(drawLoop);
 }
