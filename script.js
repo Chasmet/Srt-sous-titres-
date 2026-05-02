@@ -17,6 +17,7 @@ const renderDownloadLink = document.getElementById("renderDownloadLink");
 const saveWorkerBtn = document.getElementById("saveWorkerBtn");
 const loadVideoBtn = document.getElementById("loadVideoBtn");
 const generateBtn = document.getElementById("generateBtn");
+const applySrtBtn = document.getElementById("applySrtBtn");
 const copyBtn = document.getElementById("copyBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const burnBtn = document.getElementById("burnBtn");
@@ -103,7 +104,7 @@ loadVideoBtn.addEventListener("click", () => {
   videoPreview.load();
 
   startOverlayLoop();
-  showStatus("Vidéo chargée. Tu peux maintenant générer les sous-titres.", "success");
+  showStatus("Vidéo chargée. Tu peux générer ou coller les sous-titres.", "success");
 });
 
 generateBtn.addEventListener("click", async () => {
@@ -138,19 +139,30 @@ generateBtn.addEventListener("click", async () => {
       return showStatus("Erreur Worker/OpenAI. Vérifie le Worker Cloudflare.", "error");
     }
 
-    currentSrtText = text;
-    srtOutput.value = text;
-    subtitleCues = parseSrt(text);
-    createVideoSubtitles(text);
-    startOverlayLoop();
-
-    showStatus("Sous-titres générés avec succès.", "success");
+    applySrtTextToPreview(text, "Sous-titres générés avec succès.");
   } catch (error) {
     console.error(error);
     showStatus("Erreur : impossible de contacter le Worker Cloudflare.", "error");
   } finally {
     generateBtn.disabled = false;
-    generateBtn.textContent = "Générer les sous-titres SRT";
+    generateBtn.textContent = "Générer les sous-titres SRT avec l’API";
+  }
+});
+
+if (applySrtBtn) {
+  applySrtBtn.addEventListener("click", () => {
+    const text = srtOutput.value.trim();
+    if (!text) return showStatus("Colle d’abord ton SRT dans la zone texte.", "error");
+    applySrtTextToPreview(text, "SRT collé lu dans l’aperçu. Tu peux lancer la vidéo.");
+  });
+}
+
+srtOutput.addEventListener("input", () => {
+  const text = srtOutput.value.trim();
+  if (!text) {
+    currentSrtText = "";
+    subtitleCues = [];
+    subtitleOverlay.textContent = "";
   }
 });
 
@@ -183,7 +195,7 @@ if (renderExportBtn) {
 
     if (!renderUrl) return showRenderStatus("Ajoute le lien Render.", "error");
     if (!videoFile) return showRenderStatus("Ajoute la vidéo originale.", "error");
-    if (!srtText) return showRenderStatus("Génère d’abord les sous-titres SRT.", "error");
+    if (!srtText) return showRenderStatus("Génère ou colle d’abord les sous-titres SRT.", "error");
 
     try {
       localStorage.setItem("srt_app_render_url", renderUrl);
@@ -226,39 +238,18 @@ if (renderExportBtn) {
   });
 }
 
-burnBtn.addEventListener("click", async () => {
-  const srtText = srtOutput.value.trim();
+if (burnBtn) {
+  burnBtn.addEventListener("click", async () => {
+    const srtText = srtOutput.value.trim();
 
-  if (!videoPreview.src) return showStatus("Charge la vidéo avant l’export.", "error");
-  if (!srtText) return showStatus("Génère les sous-titres avant l’export.", "error");
-  if (!window.MediaRecorder) return showStatus("Ton navigateur ne permet pas l’export vidéo ici.", "error");
+    if (!videoPreview.src) return showStatus("Charge la vidéo avant l’export.", "error");
+    if (!srtText) return showStatus("Génère ou colle les sous-titres avant l’export.", "error");
+    if (!window.MediaRecorder) return showStatus("Ton navigateur ne permet pas l’export vidéo ici.", "error");
 
-  subtitleCues = parseSrt(srtText);
-  if (!subtitleCues.length) return showStatus("Le SRT est vide ou mal formaté.", "error");
-
-  try {
-    burnBtn.disabled = true;
-    burnBtn.textContent = "Export en cours...";
-    exportProgress.value = 0;
-    downloadVideoLink.classList.remove("show");
-    showStatus("Export navigateur simple : laisse la vidéo jouer jusqu’à la fin.", "loading");
-
-    const resultBlob = await renderVisiblePreviewWithSubtitles(subtitleCues);
-
-    if (finalVideoUrl) URL.revokeObjectURL(finalVideoUrl);
-    finalVideoUrl = URL.createObjectURL(resultBlob);
-    downloadVideoLink.href = finalVideoUrl;
-    downloadVideoLink.classList.add("show");
-
-    showStatus(`Vidéo navigateur créée : ${formatSize(resultBlob.size)}.`, "success");
-  } catch (error) {
-    console.error(error);
-    showStatus("Export impossible sur ce téléphone. Utilise Render ou télécharge le SRT.", "error");
-  } finally {
-    burnBtn.disabled = false;
-    burnBtn.textContent = "Créer une vidéo sous-titrée rapide";
-  }
-});
+    subtitleCues = parseSrt(srtText);
+    if (!subtitleCues.length) return showStatus("Le SRT est vide ou mal formaté.", "error");
+  });
+}
 
 fontSizeSelect.addEventListener("change", updateOverlayPositionAndSize);
 subtitlePositionSelect.addEventListener("change", updateOverlayPositionAndSize);
@@ -266,6 +257,34 @@ videoPreview.addEventListener("play", startOverlayLoop);
 videoPreview.addEventListener("pause", updateSubtitleOverlay);
 videoPreview.addEventListener("seeked", updateSubtitleOverlay);
 videoPreview.addEventListener("timeupdate", updateSubtitleOverlay);
+
+function applySrtTextToPreview(srtText, successMessage) {
+  const cleanText = normalizeSrtTextForApp(srtText);
+  const cues = parseSrt(cleanText);
+
+  if (!cues.length) {
+    showStatus("SRT illisible. Vérifie le format : numéro, timing, texte.", "error");
+    return false;
+  }
+
+  currentSrtText = cleanText;
+  srtOutput.value = cleanText;
+  subtitleCues = cues;
+  createVideoSubtitles(cleanText);
+  startOverlayLoop();
+  updateSubtitleOverlay();
+  showStatus(successMessage, "success");
+  return true;
+}
+
+function normalizeSrtTextForApp(text) {
+  return String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[–—]/g, "--")
+    .trim()
+    .concat("\n");
+}
 
 function normalizeUrl(url) {
   if (!url) return "";
@@ -430,178 +449,6 @@ function updateOverlayPositionAndSize() {
   if (position === "top") subtitleOverlay.style.top = "8%";
   if (position === "middle") subtitleOverlay.style.top = "45%";
   if (position === "bottom") subtitleOverlay.style.bottom = "8%";
-}
-
-async function renderVisiblePreviewWithSubtitles(cues) {
-  await waitForVideoMetadata(videoPreview);
-
-  const width = videoPreview.videoWidth || 720;
-  const height = videoPreview.videoHeight || 1280;
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-
-  const ctx = canvas.getContext("2d");
-  const canvasStream = canvas.captureStream(24);
-
-  if (videoPreview.captureStream) {
-    const videoStream = videoPreview.captureStream();
-    videoStream.getAudioTracks().forEach(track => canvasStream.addTrack(track));
-  }
-
-  const mimeType = getSupportedMimeType();
-  const recorder = new MediaRecorder(canvasStream, { mimeType });
-  const chunks = [];
-
-  recorder.ondataavailable = event => {
-    if (event.data && event.data.size > 0) chunks.push(event.data);
-  };
-
-  const done = new Promise((resolve, reject) => {
-    recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
-    recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
-  });
-
-  const fontSize = Number(fontSizeSelect.value);
-  const position = subtitlePositionSelect.value;
-  const duration = videoPreview.duration || 1;
-
-  videoPreview.pause();
-  videoPreview.currentTime = 0;
-  await waitForSeek(videoPreview);
-
-  recorder.start(1000);
-  await videoPreview.play();
-
-  await new Promise(resolve => {
-    function drawFrame() {
-      ctx.clearRect(0, 0, width, height);
-      ctx.drawImage(videoPreview, 0, 0, width, height);
-
-      const text = getCueTextAt(cues, videoPreview.currentTime);
-      if (text) drawSubtitle(ctx, text, width, height, fontSize, position);
-
-      exportProgress.value = Math.min(100, Math.round((videoPreview.currentTime / duration) * 100));
-
-      if (videoPreview.ended || videoPreview.currentTime >= duration) {
-        resolve();
-        return;
-      }
-
-      requestAnimationFrame(drawFrame);
-    }
-
-    drawFrame();
-  });
-
-  recorder.stop();
-  videoPreview.pause();
-  exportProgress.value = 100;
-  return await done;
-}
-
-function waitForVideoMetadata(video) {
-  return new Promise((resolve, reject) => {
-    if (video.readyState >= 1 && video.videoWidth) return resolve();
-    video.onloadedmetadata = () => resolve();
-    video.onerror = () => reject(new Error("Impossible de lire la vidéo"));
-  });
-}
-
-function waitForSeek(video) {
-  return new Promise(resolve => {
-    const finish = () => {
-      video.removeEventListener("seeked", finish);
-      resolve();
-    };
-    video.addEventListener("seeked", finish);
-    setTimeout(finish, 500);
-  });
-}
-
-function getCueTextAt(cues, time) {
-  const cue = cues.find(item => time >= item.start && time <= item.end);
-  return cue ? cue.text : "";
-}
-
-function drawSubtitle(ctx, text, width, height, fontSize, position) {
-  const paddingX = Math.round(width * 0.06);
-  const maxWidth = width - paddingX * 2;
-  const lineHeight = Math.round(fontSize * 1.25);
-  const lines = wrapText(ctx, text, maxWidth, fontSize);
-  const blockHeight = lines.length * lineHeight + 24;
-
-  let y;
-  if (position === "top") y = Math.round(height * 0.12);
-  else if (position === "middle") y = Math.round(height * 0.5 - blockHeight / 2);
-  else y = Math.round(height - blockHeight - height * 0.08);
-
-  const boxX = paddingX;
-  const boxY = y - 12;
-  const boxW = maxWidth;
-  const boxH = blockHeight;
-
-  ctx.fillStyle = "rgba(0, 0, 0, 0.62)";
-  roundRect(ctx, boxX, boxY, boxW, boxH, 20);
-  ctx.fill();
-
-  ctx.font = `900 ${fontSize}px Arial`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = "#000000";
-  ctx.lineWidth = Math.max(5, fontSize * 0.12);
-  ctx.fillStyle = "#ffffff";
-
-  lines.forEach((line, index) => {
-    const lineY = y + index * lineHeight;
-    ctx.strokeText(line, width / 2, lineY);
-    ctx.fillText(line, width / 2, lineY);
-  });
-}
-
-function wrapText(ctx, text, maxWidth, fontSize) {
-  ctx.font = `900 ${fontSize}px Arial`;
-  const words = text.split(" ");
-  const lines = [];
-  let line = "";
-
-  for (const word of words) {
-    const testLine = line ? `${line} ${word}` : word;
-    if (ctx.measureText(testLine).width > maxWidth && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = testLine;
-    }
-  }
-
-  if (line) lines.push(line);
-  return lines.slice(0, 3);
-}
-
-function roundRect(ctx, x, y, width, height, radius) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-}
-
-function getSupportedMimeType() {
-  const types = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm"
-  ];
-
-  return types.find(type => MediaRecorder.isTypeSupported(type)) || "video/webm";
 }
 
 function formatSize(bytes) {
