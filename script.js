@@ -174,16 +174,16 @@ async function exportByRecordingPreview() {
     exportRunning = true;
     lockUi(true);
     progressBox.classList.remove("hidden");
-    setProgress(1, "Démarrage de l’export...");
-    showMessage("Export en cours. La vidéo doit défiler pendant l’enregistrement.", "loading");
+    setProgress(1, "Retour de la vidéo au début...");
+    showMessage("Export en préparation. La vidéo va repartir depuis 00:00.", "loading");
 
     await prepareVideo(hiddenVideo);
     setupCanvasSize(hiddenVideo);
+    await forceVideoToStart(hiddenVideo);
 
-    hiddenVideo.pause();
-    hiddenVideo.currentTime = 0;
-    hiddenVideo.muted = true;
-    await waitForSeek(hiddenVideo);
+    if (hiddenVideo.currentTime > 0.5) {
+      throw new Error("Impossible de remettre la vidéo au début. Remets la prévisualisation à 00:00 puis relance.");
+    }
 
     drawOneFrame();
 
@@ -212,9 +212,11 @@ async function exportByRecordingPreview() {
       recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
     });
 
-    await hiddenVideo.play();
-
+    hiddenVideo.onended = null;
     recorder.start(1000);
+    setProgress(1, "Enregistrement local en cours...");
+
+    await hiddenVideo.play();
     drawLoop();
 
     await new Promise(resolve => {
@@ -350,11 +352,40 @@ function prepareVideo(video) {
   });
 }
 
-function waitForSeek(video) {
-  return new Promise(resolve => {
-    if (!video.seeking) return resolve();
-    video.onseeked = () => resolve();
+async function forceVideoToStart(video) {
+  video.pause();
+  video.muted = true;
+
+  await new Promise(resolve => setTimeout(resolve, 120));
+
+  try {
+    video.currentTime = 0;
+  } catch (error) {
+    console.warn("currentTime reset impossible", error);
+  }
+
+  await new Promise(resolve => {
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      video.removeEventListener("seeked", finish);
+      clearTimeout(timer);
+      resolve();
+    };
+
+    const timer = setTimeout(finish, 900);
+    video.addEventListener("seeked", finish, { once: true });
   });
+
+  if (video.currentTime > 0.3) {
+    try {
+      video.currentTime = 0;
+    } catch (error) {
+      console.warn("second reset impossible", error);
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
 }
 
 function parseSrt(srtText) {
