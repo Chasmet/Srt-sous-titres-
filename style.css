@@ -148,6 +148,48 @@ label {
   font-weight: 850;
 }
 
+.nativePicker {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  background: var(--card2);
+}
+
+.nativePicker label {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+.nativePicker small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  word-break: break-word;
+  font-weight: 800;
+}
+
+.nativeFile {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #050816;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.nativeFile::file-selector-button {
+  margin-right: 10px;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, var(--green), var(--blue));
+  color: #031018;
+  font-weight: 950;
+}
+
 .fileBox {
   display: grid;
   gap: 8px;
@@ -158,10 +200,6 @@ label {
   background: var(--card2);
   text-align: center;
   cursor: pointer;
-}
-
-.fileBox input {
-  display: none;
 }
 
 .fileBox strong {
@@ -175,12 +213,14 @@ label {
 
 textarea,
 select,
-input[type="range"] {
+input[type="range"],
+input[type="url"] {
   width: 100%;
 }
 
 textarea,
-select {
+select,
+input[type="url"] {
   border: 1px solid var(--border);
   border-radius: 17px;
   padding: 14px;
@@ -198,7 +238,8 @@ textarea {
 }
 
 textarea:focus,
-select:focus {
+select:focus,
+input[type="url"]:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.14);
 }
