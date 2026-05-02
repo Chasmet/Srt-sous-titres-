@@ -22,6 +22,8 @@ const progressText = document.getElementById("progressText");
 const progressPercent = document.getElementById("progressPercent");
 const progressBar = document.getElementById("progressBar");
 const downloadVideoBtn = document.getElementById("downloadVideoBtn");
+const convertMp4Btn = document.getElementById("convertMp4Btn");
+const downloadMp4Btn = document.getElementById("downloadMp4Btn");
 const message = document.getElementById("message");
 const hiddenVideo = document.getElementById("hiddenVideo");
 const exportCanvas = document.getElementById("exportCanvas");
@@ -33,8 +35,12 @@ let selectedVideo = null;
 let selectedApiAudio = null;
 let videoObjectUrl = null;
 let finalUrl = null;
+let finalBlob = null;
+let mp4Url = null;
 let subtitleCues = [];
 let exportRunning = false;
+let ffmpeg = null;
+let ffmpegLoaded = false;
 
 const savedWorker = localStorage.getItem("srt_app_worker_url");
 if (savedWorker) workerUrl.value = savedWorker;
@@ -112,6 +118,7 @@ downloadSrtBtn.addEventListener("click", () => {
 });
 
 startBtn.addEventListener("click", exportByRecordingPreview);
+convertMp4Btn.addEventListener("click", convertWebmToMp4);
 
 async function generateSrtWithApi() {
   const url = normalizeUrl(workerUrl.value || localStorage.getItem("srt_app_worker_url") || "");
@@ -209,13 +216,18 @@ async function exportByRecordingPreview() {
     recorder.stop();
     await done;
 
-    const blob = new Blob(chunks, { type: mimeType || "video/webm" });
-    finalUrl = URL.createObjectURL(blob);
+    finalBlob = new Blob(chunks, { type: mimeType || "video/webm" });
+    finalUrl = URL.createObjectURL(finalBlob);
     downloadVideoBtn.href = finalUrl;
     downloadVideoBtn.download = mimeType.includes("mp4") ? "video-sous-titree.mp4" : "video-sous-titree.webm";
     downloadVideoBtn.classList.remove("hidden");
+
+    if (!mimeType.includes("mp4")) {
+      convertMp4Btn.classList.remove("hidden");
+    }
+
     setProgress(100, "Terminé.");
-    showMessage(`Export prêt : ${formatMo(blob.size)}. Mode ${getQualityLabel()} avec meilleure qualité locale.`, "success");
+    showMessage(`Export prêt : ${formatMo(finalBlob.size)}. Si CapCut ne lit pas ce fichier, convertis-le en MP4.`, "success");
   } catch (error) {
     console.error(error);
     showMessage("Erreur pendant l’export local. Essaie Mobile léger ou une vidéo moins longue.", "error");
@@ -224,6 +236,75 @@ async function exportByRecordingPreview() {
     hiddenVideo.pause();
     exportRunning = false;
     lockUi(false);
+  }
+}
+
+async function convertWebmToMp4() {
+  if (!finalBlob) return showMessage("Fais d’abord un export vidéo.", "error");
+
+  try {
+    lockUi(true);
+    convertMp4Btn.disabled = true;
+    convertMp4Btn.textContent = "Conversion MP4 en cours...";
+    progressBox.classList.remove("hidden");
+    setProgress(0, "Chargement du convertisseur MP4...");
+    showMessage("Conversion locale en MP4 pour CapCut. Ça peut prendre du temps sur téléphone.", "loading");
+
+    const { FFmpeg } = await import("https://esm.sh/@ffmpeg/ffmpeg@0.12.15");
+    const { fetchFile, toBlobURL } = await import("https://esm.sh/@ffmpeg/util@0.12.2");
+
+    if (!ffmpegLoaded) {
+      ffmpeg = new FFmpeg();
+      ffmpeg.on("progress", ({ progress }) => {
+        const value = Math.min(99, Math.max(1, Math.round(progress * 100)));
+        setProgress(value, "Conversion MP4 en cours...");
+      });
+
+      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm")
+      });
+      ffmpegLoaded = true;
+    }
+
+    await ffmpeg.writeFile("input.webm", await fetchFile(finalBlob));
+    await ffmpeg.exec([
+      "-i", "input.webm",
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "23",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-b:a", "160k",
+      "-movflags", "+faststart",
+      "output.mp4"
+    ]);
+
+    const data = await ffmpeg.readFile("output.mp4");
+    const mp4Blob = new Blob([data.buffer], { type: "video/mp4" });
+
+    if (mp4Url) URL.revokeObjectURL(mp4Url);
+    mp4Url = URL.createObjectURL(mp4Blob);
+    downloadMp4Btn.href = mp4Url;
+    downloadMp4Btn.classList.remove("hidden");
+
+    try {
+      await ffmpeg.deleteFile("input.webm");
+      await ffmpeg.deleteFile("output.mp4");
+    } catch (error) {
+      console.warn("Nettoyage FFmpeg impossible", error);
+    }
+
+    setProgress(100, "MP4 prêt.");
+    showMessage(`MP4 prêt pour CapCut : ${formatMo(mp4Blob.size)}.`, "success");
+  } catch (error) {
+    console.error(error);
+    showMessage("Conversion MP4 impossible sur ce téléphone. Garde le WebM ou convertis sur ordinateur.", "error");
+  } finally {
+    lockUi(false);
+    convertMp4Btn.disabled = false;
+    convertMp4Btn.textContent = "Convertir en MP4 pour CapCut";
   }
 }
 
@@ -316,14 +397,8 @@ function getVideoBitrate() {
   return 3500000;
 }
 
-function getQualityLabel() {
-  if (qualitySelect.value === "high") return "haute qualité";
-  if (qualitySelect.value === "medium") return "bonne qualité";
-  return "mobile léger";
-}
-
 function getRecorderMimeType() {
-  const types = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  const types = ["video/mp4;codecs=h264,aac", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
   return types.find(type => MediaRecorder.isTypeSupported(type)) || "video/webm";
 }
 
@@ -435,6 +510,7 @@ function showApiStatus(text, type) {
 
 function lockUi(locked) {
   startBtn.disabled = locked;
+  convertMp4Btn.disabled = locked;
   videoFile.disabled = locked;
   srtInput.disabled = locked;
   pasteBtn.disabled = locked;
@@ -443,14 +519,20 @@ function lockUi(locked) {
   fontSize.disabled = locked;
   qualitySelect.disabled = locked;
   formatSelect.disabled = locked;
-  startBtn.textContent = locked ? "Export en cours..." : "Exporter avec sous-titres";
+  startBtn.textContent = locked ? "Traitement en cours..." : "Exporter avec sous-titres";
 }
 
 function resetDownload() {
   if (finalUrl) URL.revokeObjectURL(finalUrl);
+  if (mp4Url) URL.revokeObjectURL(mp4Url);
   finalUrl = null;
+  finalBlob = null;
+  mp4Url = null;
   downloadVideoBtn.href = "#";
+  downloadMp4Btn.href = "#";
   downloadVideoBtn.classList.add("hidden");
+  downloadMp4Btn.classList.add("hidden");
+  convertMp4Btn.classList.add("hidden");
   setProgress(0, "Préparation...");
 }
 
