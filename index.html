@@ -4,25 +4,46 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - sous-titres vidéo</title>
-  <meta name="description" content="Application gratuite pour coller un SRT, incruster les sous-titres dans une vidéo et compresser en local dans le navigateur." />
-  <link rel="stylesheet" href="style.css?v=20260502-1200" />
+  <meta name="description" content="Application gratuite pour coller un SRT, générer un SRT via API au choix, incruster les sous-titres dans une vidéo et compresser en local dans le navigateur." />
+  <link rel="stylesheet" href="style.css?v=20260502-1215" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Sans Render - Sans API obligatoire</div>
+      <div class="pill">Sans Render - API au choix</div>
       <h1>SRT Studio</h1>
-      <p>Charge ta vidéo, colle ton SRT, incruste les sous-titres et récupère un MP4 compressé directement depuis ton téléphone.</p>
+      <p>Charge ta vidéo, colle ton SRT ou génère-le via ton Worker Cloudflare, puis récupère un MP4 compressé directement depuis ton téléphone.</p>
     </header>
 
     <section class="card strong">
       <h2>Mode simple</h2>
       <div class="steps">
         <div><span>1</span><p>Ajoute ta vidéo MP4.</p></div>
-        <div><span>2</span><p>Colle ton SRT déjà prêt.</p></div>
+        <div><span>2</span><p>Colle ton SRT ou génère-le avec l’API.</p></div>
         <div><span>3</span><p>Lance l’incrustation locale.</p></div>
       </div>
+    </section>
+
+    <section class="card apiCard">
+      <h2>Option API SRT</h2>
+      <p class="info">À utiliser seulement quand tu veux créer automatiquement le SRT avec ton Worker Cloudflare. Ta clé OpenAI reste côté Cloudflare, jamais dans GitHub.</p>
+
+      <label for="workerUrl">Lien Cloudflare Worker</label>
+      <input id="workerUrl" type="url" value="https://srt-openai-worker.skypieachannel.workers.dev" autocomplete="off" />
+
+      <label class="fileBox smallFile" for="audioFile">
+        <input id="audioFile" type="file" accept="audio/*,video/*" />
+        <strong>Choisir audio ou vidéo pour générer le SRT</strong>
+        <small id="audioName">Aucun fichier API sélectionné</small>
+      </label>
+
+      <div class="actions twoActions">
+        <button id="saveWorkerBtn" class="btn secondary">Sauvegarder Worker</button>
+        <button id="generateSrtBtn" class="btn secondary">Générer SRT via API</button>
+      </div>
+
+      <div id="apiStatus" class="status">API en attente.</div>
     </section>
 
     <section class="card">
@@ -37,7 +58,7 @@
 
     <section class="card">
       <h2>2. SRT à incruster</h2>
-      <textarea id="srtInput" placeholder="Colle ton SRT ici :
+      <textarea id="srtInput" placeholder="Colle ton SRT ici ou génère-le avec l’option API :
 
 1
 00:00:00,000 --> 00:00:02,000
@@ -97,10 +118,10 @@ Deuxième sous-titre"></textarea>
 
     <section class="card warning">
       <h2>À savoir</h2>
-      <p>Cette version travaille en local avec FFmpeg dans le navigateur. C’est gratuit, mais sur téléphone il faut éviter les vidéos trop longues ou trop lourdes.</p>
+      <p>Render est supprimé. Le SRT peut venir soit du collage manuel gratuit, soit de ton Worker API. L’incrustation vidéo reste locale avec FFmpeg dans le navigateur.</p>
     </section>
   </main>
 
-  <script type="module" src="script.js?v=20260502-1200"></script>
+  <script type="module" src="script.js?v=20260502-1215"></script>
 </body>
 </html>
