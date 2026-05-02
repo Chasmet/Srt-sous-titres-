@@ -1,5 +1,6 @@
 (() => {
-  let previewVideoUrl = null;
+  const PART_COUNT = 3;
+  const previewVideoUrls = [];
 
   window.addEventListener("load", () => {
     const video = document.getElementById("videoPreview");
@@ -14,26 +15,36 @@
     if (!video || !srtOutput || !burnBtn || !progress || !downloadLink) return;
 
     const exportCard = burnBtn.closest("section");
+    let partsBox = document.getElementById("previewPartsBox");
+
     if (exportCard) {
       const title = exportCard.querySelector("h2");
-      const info = exportCard.querySelector("p.info");
-      if (title) title.textContent = "8. Télécharger l’aperçu sous-titré";
+      const info = exportCard.querySelector("p.info") || exportCard.querySelector("p");
+      if (title) title.textContent = "7. Télécharger l’aperçu en 3 vidéos";
       if (info) {
-        info.textContent = "Cette option filme uniquement l’aperçu propre : ta vidéo + les sous-titres visibles. Le fichier est sauvegardé dans les téléchargements du téléphone.";
+        info.textContent = "L’app filme l’aperçu en 3 fichiers séparés pour éviter que le téléphone plante. Tu peux ensuite recoller les 3 vidéos dans CapCut.";
+      }
+
+      if (!partsBox) {
+        partsBox = document.createElement("div");
+        partsBox.id = "previewPartsBox";
+        partsBox.className = "actions";
+        partsBox.style.marginTop = "12px";
+        exportCard.appendChild(partsBox);
       }
     }
 
-    burnBtn.textContent = "Télécharger l’aperçu avec sous-titres";
-    downloadLink.textContent = "Ouvrir / télécharger la vidéo de l’aperçu";
-    downloadLink.download = "apercu-sous-titre.webm";
+    burnBtn.textContent = "Créer 3 vidéos de l’aperçu";
+    downloadLink.textContent = "Dernière partie créée";
+    downloadLink.download = "apercu-sous-titre-partie.webm";
 
     burnBtn.addEventListener("click", async event => {
       event.preventDefault();
       event.stopImmediatePropagation();
-      await capturePreviewVideo();
+      await capturePreviewInThreeParts();
     }, true);
 
-    async function capturePreviewVideo() {
+    async function capturePreviewInThreeParts() {
       const srtText = (srtOutput.value || "").trim();
       if (!video.src) return setStatus("Charge la vidéo avant de télécharger l’aperçu.", "error");
       if (!srtText) return setStatus("Génère d’abord les sous-titres SRT.", "error");
@@ -43,35 +54,60 @@
       if (!cues.length) return setStatus("Le SRT est vide ou mal formaté.", "error");
 
       try {
+        await waitForVideoReady(video);
+        const duration = video.duration || 0;
+        if (!duration || !Number.isFinite(duration)) return setStatus("Durée vidéo introuvable.", "error");
+
+        clearOldPartLinks();
+
         burnBtn.disabled = true;
-        burnBtn.textContent = "Capture de l’aperçu...";
+        burnBtn.textContent = "Capture 1/3...";
         progress.value = 0;
         downloadLink.classList.remove("show");
-        setStatus("Capture de l’aperçu en cours. Ne ferme pas la page.", "loading");
+        setStatus("Capture en 3 fichiers. Laisse l’écran allumé.", "loading");
 
-        const result = await recordPreview(cues);
-        if (previewVideoUrl) URL.revokeObjectURL(previewVideoUrl);
-        previewVideoUrl = URL.createObjectURL(result.blob);
+        const partDuration = duration / PART_COUNT;
+        const results = [];
 
-        const fileName = result.mimeType.includes("mp4") ? "apercu-sous-titre.mp4" : "apercu-sous-titre.webm";
-        downloadLink.href = previewVideoUrl;
-        downloadLink.download = fileName;
-        downloadLink.classList.add("show");
+        for (let partIndex = 0; partIndex < PART_COUNT; partIndex++) {
+          const start = partIndex * partDuration;
+          const end = partIndex === PART_COUNT - 1 ? duration : (partIndex + 1) * partDuration;
 
-        await saveBlobToPhone(result.blob, fileName, result.mimeType);
-        setStatus(`Aperçu sauvegardé : ${formatSizePreview(result.blob.size)}.`, "success");
+          burnBtn.textContent = `Capture ${partIndex + 1}/3...`;
+          setStatus(`Capture de la partie ${partIndex + 1}/3 en cours...`, "loading");
+
+          const result = await recordPreviewPart(cues, start, end, partIndex, duration);
+          const fileName = buildFileName(result.mimeType, partIndex + 1);
+          const url = URL.createObjectURL(result.blob);
+          previewVideoUrls.push(url);
+          results.push({ ...result, url, fileName, partNumber: partIndex + 1 });
+
+          addPartLink(url, fileName, partIndex + 1, result.blob.size);
+          await saveBlobToPhone(result.blob, fileName, result.mimeType);
+          await pauseBetweenParts();
+        }
+
+        const last = results[results.length - 1];
+        if (last) {
+          downloadLink.href = last.url;
+          downloadLink.download = last.fileName;
+          downloadLink.classList.add("show");
+        }
+
+        progress.value = 100;
+        const totalSize = results.reduce((sum, item) => sum + item.blob.size, 0);
+        setStatus(`3 vidéos créées : ${formatSizePreview(totalSize)} au total. Recoller dans CapCut.`, "success");
       } catch (error) {
         console.error(error);
-        setStatus("Capture impossible sur ce téléphone. Essaie une vidéo plus courte.", "error");
+        setStatus("Capture interrompue. Essaie avec écran allumé et sans changer d’application.", "error");
       } finally {
         burnBtn.disabled = false;
-        burnBtn.textContent = "Télécharger l’aperçu avec sous-titres";
+        burnBtn.textContent = "Créer 3 vidéos de l’aperçu";
+        video.pause();
       }
     }
 
-    async function recordPreview(cues) {
-      await waitForVideoReady(video);
-
+    async function recordPreviewPart(cues, startTime, endTime, partIndex, totalDuration) {
       const naturalWidth = video.videoWidth || 720;
       const naturalHeight = video.videoHeight || 1280;
       const displayWidth = video.clientWidth || naturalWidth;
@@ -103,13 +139,12 @@
       const cssFontSize = Math.max(18, selectedFont / 2);
       const drawFontSize = Math.round(cssFontSize * scale);
       const position = subtitlePositionSelect?.value || "bottom";
-      const duration = video.duration || 1;
 
       video.pause();
-      video.currentTime = 0;
+      video.currentTime = Math.max(0, startTime);
       await waitForSeekPreview(video);
 
-      recorder.start(1000);
+      recorder.start(500);
       await video.play();
 
       await new Promise(resolve => {
@@ -121,9 +156,10 @@
           const subtitle = getCueText(cues, video.currentTime);
           if (subtitle) drawPreviewSubtitle(ctx, subtitle, naturalWidth, naturalHeight, drawFontSize, position);
 
-          progress.value = Math.min(100, Math.round((video.currentTime / duration) * 100));
+          const totalPercent = ((partIndex + ((video.currentTime - startTime) / Math.max(1, endTime - startTime))) / PART_COUNT) * 100;
+          progress.value = Math.min(100, Math.max(0, Math.round(totalPercent)));
 
-          if (video.ended || video.currentTime >= duration) {
+          if (video.ended || video.currentTime >= endTime || video.currentTime >= totalDuration) {
             resolve();
             return;
           }
@@ -134,8 +170,8 @@
 
       recorder.stop();
       video.pause();
-      progress.value = 100;
       const blob = await done;
+      stopCanvasTracks(canvasStream);
       return { blob, mimeType: recorderConfig.mimeType };
     }
 
@@ -143,6 +179,14 @@
       const sourceStream = typeof videoElement.captureStream === "function" ? videoElement.captureStream() : null;
       if (!sourceStream) return;
       sourceStream.getAudioTracks().forEach(track => canvasStream.addTrack(track));
+    }
+
+    function stopCanvasTracks(stream) {
+      try {
+        stream.getTracks().forEach(track => track.stop());
+      } catch (error) {
+        console.warn("Impossible de stopper les pistes", error);
+      }
     }
 
     function getRecorderConfig(width, height) {
@@ -155,9 +199,9 @@
       ];
       const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || "video/webm";
       const pixels = width * height;
-      let videoBitsPerSecond = 9000000;
-      if (pixels >= 1920 * 1080) videoBitsPerSecond = 16000000;
-      if (pixels >= 2160 * 3840) videoBitsPerSecond = 24000000;
+      let videoBitsPerSecond = 8000000;
+      if (pixels >= 1920 * 1080) videoBitsPerSecond = 12000000;
+      if (pixels >= 2160 * 3840) videoBitsPerSecond = 18000000;
       return {
         mimeType,
         videoBitsPerSecond,
@@ -166,24 +210,6 @@
     }
 
     async function saveBlobToPhone(blob, fileName, mimeType) {
-      if (window.showSaveFilePicker) {
-        try {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: fileName,
-            types: [{
-              description: "Vidéo de l’aperçu",
-              accept: { [mimeType]: [fileName.endsWith(".mp4") ? ".mp4" : ".webm"] }
-            }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          return;
-        } catch (error) {
-          console.warn("Sauvegarde manuelle annulée ou indisponible", error);
-        }
-      }
-
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -192,6 +218,31 @@
       link.click();
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+
+    function buildFileName(mimeType, partNumber) {
+      const extension = mimeType.includes("mp4") ? "mp4" : "webm";
+      return `apercu-sous-titre-partie-${partNumber}.${extension}`;
+    }
+
+    function addPartLink(url, fileName, partNumber, size) {
+      if (!partsBox) return;
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.className = "downloadLink show";
+      link.textContent = `Télécharger partie ${partNumber}/3 - ${formatSizePreview(size)}`;
+      partsBox.appendChild(link);
+    }
+
+    function clearOldPartLinks() {
+      previewVideoUrls.splice(0).forEach(url => URL.revokeObjectURL(url));
+      if (partsBox) partsBox.innerHTML = "";
+      downloadLink.classList.remove("show");
+    }
+
+    function pauseBetweenParts() {
+      return new Promise(resolve => setTimeout(resolve, 800));
     }
 
     function drawPreviewSubtitle(ctx, text, width, height, fontSize, position) {
