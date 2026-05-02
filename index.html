@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - sous-titres vidéo</title>
   <meta name="description" content="Application gratuite pour coller un SRT, générer un SRT via API au choix, incruster les sous-titres dans une vidéo et compresser en local dans le navigateur." />
-  <link rel="stylesheet" href="style.css?v=20260502-1215" />
+  <link rel="stylesheet" href="style.css?v=20260502-1230" />
 </head>
 <body>
   <main class="app">
@@ -32,11 +32,19 @@
       <label for="workerUrl">Lien Cloudflare Worker</label>
       <input id="workerUrl" type="url" value="https://srt-openai-worker.skypieachannel.workers.dev" autocomplete="off" />
 
-      <label class="fileBox smallFile" for="audioFile">
-        <input id="audioFile" type="file" accept="audio/*,video/*" />
-        <strong>Choisir audio ou vidéo pour générer le SRT</strong>
-        <small id="audioName">Aucun fichier API sélectionné</small>
+      <label class="fileBox smallFile" for="apiAudioFile">
+        <input id="apiAudioFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" />
+        <strong>Choisir un audio pour générer le SRT</strong>
+        <small id="apiAudioName">Aucun audio sélectionné</small>
       </label>
+
+      <label class="fileBox smallFile" for="apiVideoFile">
+        <input id="apiVideoFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
+        <strong>Choisir une vidéo pour générer le SRT</strong>
+        <small id="apiVideoName">Aucune vidéo API sélectionnée</small>
+      </label>
+
+      <button id="useOriginalForApiBtn" class="btn secondary">Utiliser la vidéo originale pour l’API</button>
 
       <div class="actions twoActions">
         <button id="saveWorkerBtn" class="btn secondary">Sauvegarder Worker</button>
@@ -49,7 +57,7 @@
     <section class="card">
       <h2>1. Vidéo originale</h2>
       <label class="fileBox" for="videoFile">
-        <input id="videoFile" type="file" accept="video/*" />
+        <input id="videoFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
         <strong>Choisir une vidéo</strong>
         <small id="videoName">Aucune vidéo sélectionnée</small>
       </label>
@@ -122,6 +130,6 @@ Deuxième sous-titre"></textarea>
     </section>
   </main>
 
-  <script type="module" src="script.js?v=20260502-1215"></script>
+  <script type="module" src="script.js?v=20260502-1230"></script>
 </body>
 </html>
