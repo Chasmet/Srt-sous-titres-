@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - local</title>
   <meta name="description" content="Génère ou colle un SRT, prévisualise les sous-titres sur la vidéo, puis exporte en local sur téléphone." />
-  <link rel="stylesheet" href="style.css?v=20260502-1815" />
+  <link rel="stylesheet" href="style.css?v=20260502-1835" />
 </head>
 <body>
   <main class="app">
@@ -80,9 +80,11 @@ Deuxième sous-titre"></textarea>
       <label for="qualitySelect">Qualité export local</label>
       <select id="qualitySelect">
         <option value="mobile">Mobile léger - plus stable</option>
-        <option value="medium" selected>Bonne qualité - recommandé</option>
-        <option value="high">Haute qualité - plus lourd</option>
+        <option value="smooth134" selected>Fluide qualité - conseillé</option>
+        <option value="medium">Bonne qualité - plus léger</option>
+        <option value="high">Haute qualité - très lourd</option>
       </select>
+      <p class="info">Le mode Fluide qualité reprend l’esprit de la version qui sortait autour de 134 Mo selon la durée vidéo.</p>
 
       <label for="formatSelect">Format vidéo</label>
       <select id="formatSelect">
@@ -121,6 +123,6 @@ Deuxième sous-titre"></textarea>
       <p>Tout est local. Aucun Render. Pour un MP4 final, utilise un convertisseur en ligne ou CapCut après l’export.</p>
     </section>
   </main>
-  <script src="script.js?v=20260502-1815"></script>
+  <script src="script.js?v=20260502-1835"></script>
 </body>
 </html>
