@@ -92,7 +92,7 @@ app.get("/", (req, res) => {
   res.status(200).json({
     ok: true,
     name: "Sous-titres IA Render FFmpeg",
-    memoryMode: "chunk-upload + small-segment-ffmpeg",
+    memoryMode: "chunk-upload + small-segment-ffmpeg + clean-subtitles",
     maxUploadMb: MAX_UPLOAD_MB,
     chunkSizeMb: CHUNK_SIZE_MB,
     bigVideoMb: BIG_VIDEO_MB,
@@ -492,14 +492,18 @@ function pad2(value) {
 
 function buildSubtitleFilter(srtPath, fontSize, position) {
   const safePath = escapeSubtitlePath(srtPath);
-  const size = Math.max(18, Math.min(fontSize, 72));
+
+  // L'app envoie 34 / 42 / 52 pour l'aperçu navigateur.
+  // FFmpeg/ASS interprète ces valeurs beaucoup trop grandes sur mobile.
+  // On les réduit ici pour obtenir des sous-titres propres, type CapCut.
+  const size = Math.max(15, Math.min(Math.round(Number(fontSize || 42) * 0.42), 24));
 
   let alignment = 2;
-  let marginV = 42;
+  let marginV = 58;
 
   if (position === "top") {
     alignment = 8;
-    marginV = 42;
+    marginV = 58;
   }
 
   if (position === "middle") {
@@ -513,10 +517,10 @@ function buildSubtitleFilter(srtPath, fontSize, position) {
     "Bold=1",
     "PrimaryColour=&H00FFFFFF",
     "OutlineColour=&H00000000",
-    "BackColour=&H99000000",
-    "BorderStyle=3",
+    "BackColour=&H00000000",
+    "BorderStyle=1",
     "Outline=2",
-    "Shadow=0",
+    "Shadow=1",
     `Alignment=${alignment}`,
     `MarginV=${marginV}`
   ].join(",");
