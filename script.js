@@ -17,7 +17,6 @@ const fontSizeValue = document.getElementById("fontSizeValue");
 const qualitySelect = document.getElementById("qualitySelect");
 const formatSelect = document.getElementById("formatSelect");
 const startBtn = document.getElementById("startBtn");
-const splitExportBtn = document.getElementById("splitExportBtn");
 const progressBox = document.getElementById("progressBox");
 const progressText = document.getElementById("progressText");
 const progressPercent = document.getElementById("progressPercent");
@@ -30,7 +29,6 @@ const exportCanvas = document.getElementById("exportCanvas");
 
 const API_MAX_SIZE = 25 * 1024 * 1024;
 const EXPORT_FPS = 30;
-const SPLIT_COUNT = 3;
 
 let selectedVideo = null;
 let selectedApiAudio = null;
@@ -39,7 +37,6 @@ let localUrl = null;
 let subtitleCues = [];
 let exportRunning = false;
 let drawFrameId = null;
-let partUrls = [];
 
 hiddenVideo.muted = true;
 hiddenVideo.playsInline = true;
@@ -61,11 +58,8 @@ apiAudioFile.addEventListener("change", () => {
   if (!file) return;
   selectedApiAudio = file;
   apiAudioName.textContent = `${file.name} - ${formatMo(file.size)}`;
-  if (file.size > API_MAX_SIZE) {
-    showApiStatus("Audio trop lourd pour l’API. Utilise un audio plus court ou compressé, moins de 25 Mo.", "error");
-  } else {
-    showApiStatus("Audio prêt pour génération SRT.", "success");
-  }
+  if (file.size > API_MAX_SIZE) showApiStatus("Audio trop lourd pour l’API. Utilise moins de 25 Mo.", "error");
+  else showApiStatus("Audio prêt pour génération SRT.", "success");
 });
 
 generateSrtBtn.addEventListener("click", generateSrtWithApi);
@@ -74,45 +68,37 @@ videoFile.addEventListener("change", () => {
   selectedVideo = videoFile.files && videoFile.files[0] ? videoFile.files[0] : null;
   if (!selectedVideo) {
     videoName.textContent = "Aucune vidéo sélectionnée";
-    showMessage("Aucune vidéo sélectionnée.", "");
-    return;
+    return showMessage("Aucune vidéo sélectionnée.", "");
   }
 
   videoName.textContent = `${selectedVideo.name} - ${formatMo(selectedVideo.size)}`;
-
   if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
   videoObjectUrl = URL.createObjectURL(selectedVideo);
   hiddenVideo.src = videoObjectUrl;
   hiddenVideo.muted = true;
   hiddenVideo.load();
-
-  showMessage("Vidéo prête. Tu peux coller le SRT puis exporter en local.", "success");
+  showMessage("Vidéo prête. Colle ton SRT puis crée la vidéo fluide.", "success");
 });
 
 srtInput.addEventListener("input", validateSrt);
 fontSize.addEventListener("input", () => fontSizeValue.textContent = fontSize.value);
-startBtn.addEventListener("click", () => exportOneLocalVideo());
-splitExportBtn.addEventListener("click", () => exportSplitLocalVideos());
+startBtn.addEventListener("click", exportOneLocalVideo);
 
 pasteBtn.addEventListener("click", async () => {
   try {
     srtInput.value = cleanSrt(await navigator.clipboard.readText());
     validateSrt();
-    showMessage("SRT collé. Tu peux lancer l’export local.", "success");
+    showMessage("SRT collé. Tu peux lancer l’export.", "success");
   } catch (error) {
-    showMessage("Collage automatique bloqué. Colle le SRT manuellement dans la zone.", "error");
+    showMessage("Collage automatique bloqué. Colle manuellement dans la zone.", "error");
   }
 });
 
 copyBtn.addEventListener("click", async () => {
   const srt = cleanSrt(srtInput.value);
   if (!srt) return showMessage("Aucun SRT à copier.", "error");
-  try {
-    await navigator.clipboard.writeText(srt);
-  } catch (e) {
-    srtInput.select();
-    document.execCommand("copy");
-  }
+  try { await navigator.clipboard.writeText(srt); }
+  catch (e) { srtInput.select(); document.execCommand("copy"); }
   showMessage("SRT copié.", "success");
 });
 
@@ -126,15 +112,15 @@ downloadSrtBtn.addEventListener("click", () => {
 async function generateSrtWithApi() {
   const url = normalizeUrl(workerUrl.value || localStorage.getItem("srt_app_worker_url") || "");
   if (!url) return showApiStatus("Ajoute ton lien Worker Cloudflare.", "error");
-  if (!selectedApiAudio) return showApiStatus("Choisis un fichier audio pour générer le SRT.", "error");
-  if (selectedApiAudio.size > API_MAX_SIZE) return showApiStatus(`Audio trop lourd : ${formatMo(selectedApiAudio.size)}. Prends un audio de moins de 25 Mo.`, "error");
+  if (!selectedApiAudio) return showApiStatus("Choisis un fichier audio.", "error");
+  if (selectedApiAudio.size > API_MAX_SIZE) return showApiStatus(`Audio trop lourd : ${formatMo(selectedApiAudio.size)}.`, "error");
 
   try {
     localStorage.setItem("srt_app_worker_url", url);
     workerUrl.value = url;
     generateSrtBtn.disabled = true;
-    generateSrtBtn.textContent = "Génération en cours...";
-    showApiStatus("Appel au générateur SRT audio en cours...", "loading");
+    generateSrtBtn.textContent = "Génération...";
+    showApiStatus("Génération SRT audio en cours...", "loading");
 
     const formData = new FormData();
     formData.append("file", selectedApiAudio, selectedApiAudio.name || "audio.mp3");
@@ -142,14 +128,13 @@ async function generateSrtWithApi() {
 
     const response = await fetch(url, { method: "POST", body: formData });
     const text = await response.text();
-
     if (!response.ok) return showApiStatus(`Erreur API ${response.status}.`, "error");
 
     srtInput.value = cleanSrt(text);
     validateSrt();
     showApiStatus("SRT généré depuis l’audio.", "success");
   } catch (error) {
-    showApiStatus("Impossible de contacter le Worker Cloudflare.", "error");
+    showApiStatus("Impossible de contacter le Worker.", "error");
   } finally {
     generateSrtBtn.disabled = false;
     generateSrtBtn.textContent = "Générer SRT via API";
@@ -157,65 +142,24 @@ async function generateSrtWithApi() {
 }
 
 async function exportOneLocalVideo() {
-  await exportLocalPart({ partIndex: 0, totalParts: 1, startRatio: 0, endRatio: 1, resetBefore: true });
-}
-
-async function exportSplitLocalVideos() {
   if (!prepareExport()) return;
 
   try {
-    resetDownloads();
+    resetDownload();
     exportRunning = true;
     lockUi(true);
     progressBox.classList.remove("hidden");
-    showMessage("Export local en 3 parties. Garde l’écran allumé.", "loading");
+    showMessage("Création d’un seul fichier fluide. Garde l’écran allumé.", "loading");
 
     await prepareVideo(hiddenVideo);
     const duration = hiddenVideo.duration;
     if (!duration || !Number.isFinite(duration)) throw new Error("Durée vidéo introuvable.");
 
-    for (let i = 0; i < SPLIT_COUNT; i++) {
-      const startRatio = i / SPLIT_COUNT;
-      const endRatio = (i + 1) / SPLIT_COUNT;
-      const blob = await recordPart(startRatio * duration, endRatio * duration, i, SPLIT_COUNT);
-      const url = URL.createObjectURL(blob);
-      partUrls.push(url);
-      addDownloadLink(url, `video-sous-titree-partie-${i + 1}.webm`, `Télécharger partie ${i + 1}/3 - ${formatMo(blob.size)}`);
-      downloadBlob(blob, `video-sous-titree-partie-${i + 1}.webm`);
-      setProgress(Math.round(((i + 1) / SPLIT_COUNT) * 100), `Partie ${i + 1}/3 terminée.`);
-      await sleep(700);
-    }
-
-    showMessage("Les 3 parties sont prêtes. Télécharge-les puis colle-les dans CapCut.", "success");
-  } catch (error) {
-    console.error(error);
-    showMessage(`Erreur export : ${error.message || "capture impossible."}`, "error");
-  } finally {
-    stopExportLoop();
-    hiddenVideo.pause();
-    exportRunning = false;
-    lockUi(false);
-  }
-}
-
-async function exportLocalPart({ partIndex, totalParts, startRatio, endRatio, resetBefore }) {
-  if (!prepareExport()) return;
-
-  try {
-    if (resetBefore) resetDownloads();
-    exportRunning = true;
-    lockUi(true);
-    progressBox.classList.remove("hidden");
-    showMessage("Export local en cours. Garde l’écran allumé.", "loading");
-
-    await prepareVideo(hiddenVideo);
-    const duration = hiddenVideo.duration;
-    if (!duration || !Number.isFinite(duration)) throw new Error("Durée vidéo introuvable.");
-
-    const blob = await recordPart(startRatio * duration, endRatio * duration, partIndex, totalParts);
-    localBlobReady(blob, totalParts === 1 ? "video-sous-titree.webm" : `video-sous-titree-partie-${partIndex + 1}.webm`);
-    setProgress(100, "Export local terminé.");
-    showMessage(`Vidéo locale prête : ${formatMo(blob.size)}.`, "success");
+    const blob = await recordFullVideo(duration);
+    const fixedBlob = await fixDurationIfNeeded(blob, duration * 1000);
+    localBlobReady(fixedBlob, "video-sous-titree-fluide.webm");
+    setProgress(100, "Vidéo terminée.");
+    showMessage(`Vidéo fluide prête : ${formatMo(fixedBlob.size)}.`, "success");
   } catch (error) {
     console.error(error);
     showMessage(`Erreur export : ${error.message || "capture impossible."}`, "error");
@@ -229,31 +173,18 @@ async function exportLocalPart({ partIndex, totalParts, startRatio, endRatio, re
 
 function prepareExport() {
   if (exportRunning) return false;
-  if (!selectedVideo || !videoObjectUrl) {
-    showMessage("Ajoute d’abord une vidéo.", "error");
-    return false;
-  }
-  if (!validateSrt()) {
-    showMessage("Colle ou génère un SRT valide avant de lancer.", "error");
-    return false;
-  }
-  if (!window.MediaRecorder) {
-    showMessage("Ton navigateur ne supporte pas l’export local vidéo.", "error");
-    return false;
-  }
+  if (!selectedVideo || !videoObjectUrl) return showMessage("Ajoute d’abord une vidéo.", "error"), false;
+  if (!validateSrt()) return showMessage("Colle ou génère un SRT valide avant l’export.", "error"), false;
+  if (!window.MediaRecorder) return showMessage("Ton navigateur ne supporte pas l’export local vidéo.", "error"), false;
 
   subtitleCues = parseSrt(cleanSrt(srtInput.value));
-  if (!subtitleCues.length) {
-    showMessage("SRT illisible. Vérifie les timecodes.", "error");
-    return false;
-  }
-
+  if (!subtitleCues.length) return showMessage("SRT illisible. Vérifie les timecodes.", "error"), false;
   return true;
 }
 
-async function recordPart(startSecond, endSecond, partIndex, totalParts) {
+async function recordFullVideo(duration) {
   setupCanvasSize(hiddenVideo);
-  await seekVideo(hiddenVideo, startSecond);
+  await seekVideo(hiddenVideo, 0);
   drawOneFrame();
 
   const canvasStream = exportCanvas.captureStream(EXPORT_FPS);
@@ -268,7 +199,11 @@ async function recordPart(startSecond, endSecond, partIndex, totalParts) {
   }
 
   const mimeType = getRecorderMimeType();
-  const recorder = new MediaRecorder(mixedStream, { mimeType, videoBitsPerSecond: getVideoBitrate(), audioBitsPerSecond: 192000 });
+  const recorder = new MediaRecorder(mixedStream, {
+    mimeType,
+    videoBitsPerSecond: getVideoBitrate(),
+    audioBitsPerSecond: 160000
+  });
   const chunks = [];
 
   recorder.ondataavailable = event => {
@@ -286,14 +221,9 @@ async function recordPart(startSecond, endSecond, partIndex, totalParts) {
   await new Promise(resolve => {
     const draw = () => {
       drawOneFrame();
-      const partProgress = Math.min(1, Math.max(0, (hiddenVideo.currentTime - startSecond) / Math.max(1, endSecond - startSecond)));
-      const totalProgress = ((partIndex + partProgress) / totalParts) * 100;
-      setProgress(Math.round(totalProgress), totalParts === 1 ? "Création de la vidéo locale..." : `Création partie ${partIndex + 1}/${totalParts}...`);
-
-      if (hiddenVideo.ended || hiddenVideo.currentTime >= endSecond) {
-        resolve();
-        return;
-      }
+      const progress = Math.min(100, Math.round((hiddenVideo.currentTime / duration) * 100));
+      setProgress(progress, "Création de la vidéo fluide...");
+      if (hiddenVideo.ended || hiddenVideo.currentTime >= duration) return resolve();
       drawFrameId = requestAnimationFrame(draw);
     };
     draw();
@@ -302,6 +232,18 @@ async function recordPart(startSecond, endSecond, partIndex, totalParts) {
   if (recorder.state !== "inactive") recorder.stop();
   const blob = await done;
   stopTracks(mixedStream);
+  return blob;
+}
+
+async function fixDurationIfNeeded(blob, durationMs) {
+  if (typeof fixWebmDuration === "function" && blob.type.includes("webm")) {
+    try {
+      setProgress(99, "Correction durée WebM...");
+      return await fixWebmDuration(blob, durationMs, { logger: false });
+    } catch (error) {
+      console.warn("Correction durée impossible", error);
+    }
+  }
   return blob;
 }
 
@@ -328,7 +270,6 @@ function drawVideoContain(ctx, video, canvasW, canvasH) {
 
 function drawSubtitle(ctx, text) {
   if (!text) return;
-
   const fontPx = Math.max(18, Math.round((Number(fontSize.value) || 30) * (exportCanvas.width / 720)));
   const maxWidth = Math.round(exportCanvas.width * 0.86);
   const lines = wrapText(ctx, text, maxWidth, fontPx).slice(0, 3);
@@ -373,26 +314,26 @@ function setupCanvasSize(video) {
 
 function getMaxSideForQuality() {
   if (qualitySelect.value === "high") return 1920;
-  if (qualitySelect.value === "smooth134") return 1440;
+  if (qualitySelect.value === "smooth134") return 1280;
   if (qualitySelect.value === "medium") return 1280;
   return 720;
 }
 
-function setCanvas(canvas, w, h) {
-  canvas.width = Math.max(2, Math.round(w));
-  canvas.height = Math.max(2, Math.round(h));
-}
-
 function getVideoBitrate() {
-  if (qualitySelect.value === "high") return 14000000;
-  if (qualitySelect.value === "smooth134") return 6000000;
+  if (qualitySelect.value === "high") return 12000000;
+  if (qualitySelect.value === "smooth134") return 5500000;
   if (qualitySelect.value === "medium") return 4500000;
   return 2500000;
 }
 
 function getRecorderMimeType() {
-  const types = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  const types = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
   return types.find(type => MediaRecorder.isTypeSupported(type)) || "video/webm";
+}
+
+function setCanvas(canvas, w, h) {
+  canvas.width = Math.max(2, Math.round(w));
+  canvas.height = Math.max(2, Math.round(h));
 }
 
 function prepareVideo(video) {
@@ -445,27 +386,19 @@ function wrapText(ctx, text, maxWidth, fontPx) {
   const words = String(text).split(/\s+/);
   const lines = [];
   let line = "";
-
   words.forEach(word => {
     const test = line ? `${line} ${word}` : word;
     if (ctx.measureText(test).width > maxWidth && line) {
       lines.push(line);
       line = word;
-    } else {
-      line = test;
-    }
+    } else line = test;
   });
-
   if (line) lines.push(line);
   return lines;
 }
 
 function cleanSrt(text) {
-  return String(text || "")
-    .replace(/\r/g, "")
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .trim();
+  return String(text || "").replace(/\r/g, "").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
 }
 
 function validateSrt() {
@@ -475,14 +408,12 @@ function validateSrt() {
     srtStatus.className = "status";
     return false;
   }
-
   const valid = /\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}/.test(srt);
   if (!valid) {
     srtStatus.textContent = "SRT mal formaté : vérifie les timecodes.";
     srtStatus.className = "status warning";
     return false;
   }
-
   const cueCount = (srt.match(/-->/g) || []).length;
   srtStatus.textContent = `SRT valide : ${cueCount} ligne${cueCount > 1 ? "s" : ""} détectée${cueCount > 1 ? "s" : ""}.`;
   srtStatus.className = "status success";
@@ -491,8 +422,7 @@ function validateSrt() {
 
 function normalizeUrl(url) {
   const clean = String(url || "").trim().replace(/\/+$/, "");
-  if (!clean.startsWith("https://")) return "";
-  return clean;
+  return clean.startsWith("https://") ? clean : "";
 }
 
 function setProgress(value, text) {
@@ -515,7 +445,6 @@ function showApiStatus(text, type) {
 
 function lockUi(locked) {
   startBtn.disabled = locked;
-  splitExportBtn.disabled = locked;
   videoFile.disabled = locked;
   srtInput.disabled = locked;
   pasteBtn.disabled = locked;
@@ -524,16 +453,13 @@ function lockUi(locked) {
   fontSize.disabled = locked;
   qualitySelect.disabled = locked;
   formatSelect.disabled = locked;
-  startBtn.textContent = locked ? "Traitement..." : "Exporter local en 1 vidéo";
-  splitExportBtn.textContent = locked ? "Traitement..." : "Exporter local en 3 parties";
+  startBtn.textContent = locked ? "Traitement..." : "Créer 1 vidéo fluide";
 }
 
-function resetDownloads() {
+function resetDownload() {
   stopExportLoop();
   if (localUrl) URL.revokeObjectURL(localUrl);
-  partUrls.forEach(url => URL.revokeObjectURL(url));
   localUrl = null;
-  partUrls = [];
   downloadsBox.innerHTML = "";
   downloadVideoBtn.href = "#";
   downloadVideoBtn.classList.add("hidden");
@@ -547,15 +473,6 @@ function localBlobReady(blob, filename) {
   downloadVideoBtn.textContent = `Télécharger ${filename} - ${formatMo(blob.size)}`;
   downloadVideoBtn.classList.remove("hidden");
   downloadBlob(blob, filename);
-}
-
-function addDownloadLink(url, filename, label) {
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.className = "downloadLink";
-  link.textContent = label;
-  downloadsBox.appendChild(link);
 }
 
 function downloadBlob(blob, filename) {
@@ -576,10 +493,6 @@ function stopTracks(stream) {
 function stopExportLoop() {
   if (drawFrameId) cancelAnimationFrame(drawFrameId);
   drawFrameId = null;
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function formatMo(bytes) {
