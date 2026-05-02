@@ -1,6 +1,3 @@
-import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.15";
-import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
-
 const workerUrl = document.getElementById("workerUrl");
 const apiAudioFile = document.getElementById("apiAudioFile");
 const apiVideoFile = document.getElementById("apiVideoFile");
@@ -29,12 +26,15 @@ const progressPercent = document.getElementById("progressPercent");
 const progressBar = document.getElementById("progressBar");
 const downloadVideoBtn = document.getElementById("downloadVideoBtn");
 const message = document.getElementById("message");
+const hiddenVideo = document.getElementById("hiddenVideo");
+const exportCanvas = document.getElementById("exportCanvas");
 
-let ffmpeg = null;
-let ffmpegLoaded = false;
 let selectedVideo = null;
 let selectedApiFile = null;
+let videoObjectUrl = null;
 let finalUrl = null;
+let subtitleCues = [];
+let exportRunning = false;
 
 const savedWorker = localStorage.getItem("srt_app_worker_url");
 if (savedWorker) workerUrl.value = savedWorker;
@@ -50,39 +50,27 @@ saveWorkerBtn.addEventListener("click", () => {
 apiAudioFile.addEventListener("change", () => {
   const file = apiAudioFile.files && apiAudioFile.files[0] ? apiAudioFile.files[0] : null;
   if (!file) return;
-
   selectedApiFile = file;
-  apiAudioName.textContent = `${file.name} - ${(file.size / 1024 / 1024).toFixed(1)} Mo`;
+  apiAudioName.textContent = `${file.name} - ${formatMo(file.size)}`;
   apiVideoName.textContent = "Aucune vidéo API sélectionnée";
   apiVideoFile.value = "";
-
-  if (file.size > 25 * 1024 * 1024) {
-    showApiStatus("Audio lourd pour l’API. Si le Worker refuse, coupe ou compresse l’audio avant.", "warning");
-  } else {
-    showApiStatus("Audio prêt pour génération SRT.", "success");
-  }
+  showApiStatus(file.size > 25 * 1024 * 1024 ? "Audio lourd pour l’API. Si le Worker refuse, coupe ou compresse l’audio avant." : "Audio prêt pour génération SRT.", file.size > 25 * 1024 * 1024 ? "warning" : "success");
 });
 
 apiVideoFile.addEventListener("change", () => {
   const file = apiVideoFile.files && apiVideoFile.files[0] ? apiVideoFile.files[0] : null;
   if (!file) return;
-
   selectedApiFile = file;
-  apiVideoName.textContent = `${file.name} - ${(file.size / 1024 / 1024).toFixed(1)} Mo`;
+  apiVideoName.textContent = `${file.name} - ${formatMo(file.size)}`;
   apiAudioName.textContent = "Aucun audio sélectionné";
   apiAudioFile.value = "";
-
-  if (file.size > 25 * 1024 * 1024) {
-    showApiStatus("Vidéo lourde pour l’API. Essaie plutôt un audio extrait ou une vidéo courte.", "warning");
-  } else {
-    showApiStatus("Vidéo prête pour génération SRT.", "success");
-  }
+  showApiStatus(file.size > 25 * 1024 * 1024 ? "Vidéo lourde pour l’API. Essaie plutôt un audio extrait ou une vidéo courte." : "Vidéo prête pour génération SRT.", file.size > 25 * 1024 * 1024 ? "warning" : "success");
 });
 
 useOriginalForApiBtn.addEventListener("click", () => {
   if (!selectedVideo) return showApiStatus("Ajoute d’abord une vidéo originale plus bas.", "error");
   selectedApiFile = selectedVideo;
-  apiVideoName.textContent = `Vidéo originale utilisée : ${selectedVideo.name} - ${(selectedVideo.size / 1024 / 1024).toFixed(1)} Mo`;
+  apiVideoName.textContent = `Vidéo originale utilisée : ${selectedVideo.name} - ${formatMo(selectedVideo.size)}`;
   apiAudioName.textContent = "Aucun audio sélectionné";
   showApiStatus("La vidéo originale sera utilisée pour générer le SRT.", "success");
 });
@@ -91,98 +79,67 @@ generateSrtBtn.addEventListener("click", generateSrtWithApi);
 
 videoFile.addEventListener("change", () => {
   selectedVideo = videoFile.files && videoFile.files[0] ? videoFile.files[0] : null;
-
   if (!selectedVideo) {
     videoName.textContent = "Aucune vidéo sélectionnée";
     showMessage("Aucune vidéo sélectionnée.", "");
     return;
   }
-
-  const sizeMo = selectedVideo.size / 1024 / 1024;
-  videoName.textContent = `${selectedVideo.name} - ${sizeMo.toFixed(1)} Mo`;
-
-  if (sizeMo > 250) {
-    showMessage("Vidéo lourde : sur téléphone, ça peut être lent. Fais un test court d’abord.", "warning");
-  } else {
-    showMessage("Vidéo prête.", "success");
-  }
+  videoName.textContent = `${selectedVideo.name} - ${formatMo(selectedVideo.size)}`;
+  if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+  videoObjectUrl = URL.createObjectURL(selectedVideo);
+  hiddenVideo.src = videoObjectUrl;
+  hiddenVideo.load();
+  showMessage("Vidéo prête. Ce mode local compatible lit la vidéo et enregistre le résultat.", "success");
 });
 
 srtInput.addEventListener("input", validateSrt);
-
-fontSize.addEventListener("input", () => {
-  fontSizeValue.textContent = fontSize.value;
-});
-
+fontSize.addEventListener("input", () => fontSizeValue.textContent = fontSize.value);
 pasteBtn.addEventListener("click", async () => {
   try {
-    const text = await navigator.clipboard.readText();
-    srtInput.value = cleanSrt(text);
+    srtInput.value = cleanSrt(await navigator.clipboard.readText());
     validateSrt();
     showMessage("SRT collé.", "success");
   } catch (error) {
     showMessage("Collage automatique bloqué. Colle le SRT manuellement dans la zone.", "error");
   }
 });
-
 copyBtn.addEventListener("click", async () => {
   const srt = cleanSrt(srtInput.value);
   if (!srt) return showMessage("Aucun SRT à copier.", "error");
-
-  try {
-    await navigator.clipboard.writeText(srt);
-    showMessage("SRT copié.", "success");
-  } catch (error) {
-    srtInput.select();
-    document.execCommand("copy");
-    showMessage("SRT copié.", "success");
-  }
+  try { await navigator.clipboard.writeText(srt); } catch (e) { srtInput.select(); document.execCommand("copy"); }
+  showMessage("SRT copié.", "success");
 });
-
 downloadSrtBtn.addEventListener("click", () => {
   const srt = cleanSrt(srtInput.value);
   if (!srt) return showMessage("Aucun SRT à télécharger.", "error");
   downloadBlob(new Blob([srt], { type: "text/plain;charset=utf-8" }), "sous-titres.srt");
   showMessage("SRT téléchargé.", "success");
 });
-
-startBtn.addEventListener("click", processVideo);
+startBtn.addEventListener("click", exportByRecordingPreview);
 
 async function generateSrtWithApi() {
   const url = normalizeUrl(workerUrl.value || localStorage.getItem("srt_app_worker_url") || "");
-
   if (!url) return showApiStatus("Ajoute ton lien Worker Cloudflare.", "error");
   if (!selectedApiFile) return showApiStatus("Choisis un audio, une vidéo API, ou utilise la vidéo originale.", "error");
-
   try {
     localStorage.setItem("srt_app_worker_url", url);
     workerUrl.value = url;
-
     generateSrtBtn.disabled = true;
     generateSrtBtn.textContent = "Génération en cours...";
     showApiStatus("Envoi au Worker Cloudflare. Ne ferme pas la page.", "loading");
-
     const formData = new FormData();
     formData.append("file", selectedApiFile, selectedApiFile.name || "media.mp4");
     formData.append("language", "fr");
-
-    const response = await fetch(url, {
-      method: "POST",
-      body: formData
-    });
-
+    const response = await fetch(url, { method: "POST", body: formData });
     const text = await response.text();
-
     if (!response.ok) {
       console.error(text);
       return showApiStatus("Erreur API. Vérifie ton Worker ou la clé OpenAI côté Cloudflare.", "error");
     }
-
-    const srt = cleanSrt(text);
-    srtInput.value = srt;
+    srtInput.value = cleanSrt(text);
     validateSrt();
     showApiStatus("SRT généré et placé dans la zone SRT.", "success");
-    showMessage("Tu peux maintenant incruster et compresser la vidéo.", "success");
+    showMessage("Tu peux maintenant exporter avec sous-titres.", "success");
   } catch (error) {
     console.error(error);
     showApiStatus("Impossible de contacter le Worker Cloudflare.", "error");
@@ -192,161 +149,233 @@ async function generateSrtWithApi() {
   }
 }
 
+async function exportByRecordingPreview() {
+  resetDownload();
+  if (exportRunning) return;
+  if (!selectedVideo || !videoObjectUrl) return showMessage("Ajoute d’abord une vidéo.", "error");
+  if (!validateSrt()) return showMessage("Colle ou génère un SRT valide avant de lancer.", "error");
+  if (!window.MediaRecorder) return showMessage("Ton navigateur ne supporte pas l’export local vidéo.", "error");
+
+  subtitleCues = parseSrt(cleanSrt(srtInput.value));
+  if (!subtitleCues.length) return showMessage("SRT illisible. Vérifie les timecodes.", "error");
+
+  try {
+    exportRunning = true;
+    lockUi(true);
+    progressBox.classList.remove("hidden");
+    showMessage("Export local en cours. La vidéo est lue puis enregistrée avec les sous-titres.", "loading");
+    setProgress(0, "Préparation de la lecture...");
+
+    await prepareVideo(hiddenVideo);
+    setupCanvasSize(hiddenVideo);
+
+    const canvasStream = exportCanvas.captureStream(25);
+    let mixedStream = canvasStream;
+
+    try {
+      const audioStream = hiddenVideo.captureStream ? hiddenVideo.captureStream() : hiddenVideo.mozCaptureStream?.();
+      const audioTracks = audioStream ? audioStream.getAudioTracks() : [];
+      if (audioTracks.length) mixedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+    } catch (error) {
+      console.warn("Audio non capturé, export vidéo seul possible", error);
+    }
+
+    const mimeType = getRecorderMimeType();
+    const bitrate = getVideoBitrate();
+    const recorder = new MediaRecorder(mixedStream, { mimeType, videoBitsPerSecond: bitrate });
+    const chunks = [];
+
+    recorder.ondataavailable = event => {
+      if (event.data && event.data.size > 0) chunks.push(event.data);
+    };
+
+    const done = new Promise((resolve, reject) => {
+      recorder.onstop = resolve;
+      recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
+    });
+
+    hiddenVideo.currentTime = 0;
+    hiddenVideo.muted = false;
+    await hiddenVideo.play();
+
+    recorder.start(1000);
+    drawLoop();
+
+    await new Promise(resolve => hiddenVideo.onended = resolve);
+    recorder.stop();
+    await done;
+
+    const blob = new Blob(chunks, { type: mimeType || "video/webm" });
+    finalUrl = URL.createObjectURL(blob);
+    downloadVideoBtn.href = finalUrl;
+    downloadVideoBtn.download = mimeType.includes("mp4") ? "video-sous-titree.mp4" : "video-sous-titree.webm";
+    downloadVideoBtn.classList.remove("hidden");
+    setProgress(100, "Terminé.");
+    showMessage(`Export prêt : ${formatMo(blob.size)}. Qualité compressée comme l’ancienne version locale.`, "success");
+  } catch (error) {
+    console.error(error);
+    showMessage("Erreur pendant l’export local. Essaie le mode Mobile 720p ou une vidéo moins longue.", "error");
+    setProgress(0, "Échec.");
+  } finally {
+    hiddenVideo.pause();
+    exportRunning = false;
+    lockUi(false);
+  }
+}
+
+function drawLoop() {
+  if (!exportRunning || hiddenVideo.ended || hiddenVideo.paused) return;
+  const ctx = exportCanvas.getContext("2d");
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+  ctx.drawImage(hiddenVideo, 0, 0, exportCanvas.width, exportCanvas.height);
+  drawSubtitle(ctx, getSubtitleAt(hiddenVideo.currentTime));
+  const percent = hiddenVideo.duration ? Math.min(99, Math.round((hiddenVideo.currentTime / hiddenVideo.duration) * 100)) : 0;
+  setProgress(percent, "Enregistrement local en cours...");
+  requestAnimationFrame(drawLoop);
+}
+
+function drawSubtitle(ctx, text) {
+  if (!text) return;
+  const fontPx = Math.max(18, Math.round((Number(fontSize.value) || 30) * (exportCanvas.width / 720)));
+  const padding = Math.round(fontPx * 0.55);
+  const maxWidth = Math.round(exportCanvas.width * 0.86);
+  const lines = wrapText(ctx, text, maxWidth, fontPx);
+  const lineHeight = Math.round(fontPx * 1.25);
+  const boxHeight = lines.length * lineHeight + padding * 2;
+  const boxWidth = Math.min(maxWidth + padding * 2, exportCanvas.width * 0.92);
+  const x = (exportCanvas.width - boxWidth) / 2;
+  const y = exportCanvas.height - boxHeight - Math.round(exportCanvas.height * 0.07);
+
+  ctx.font = `900 ${fontPx}px Arial, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(0,0,0,0.62)";
+  roundRect(ctx, x, y, boxWidth, boxHeight, Math.round(fontPx * 0.45));
+  ctx.fill();
+  ctx.lineWidth = Math.max(3, Math.round(fontPx / 7));
+  ctx.strokeStyle = "#000";
+  ctx.fillStyle = "#fff";
+  lines.forEach((line, index) => {
+    const textY = y + padding + lineHeight * index + lineHeight / 2;
+    ctx.strokeText(line, exportCanvas.width / 2, textY);
+    ctx.fillText(line, exportCanvas.width / 2, textY);
+  });
+}
+
+function setupCanvasSize(video) {
+  const format = formatSelect.value;
+  const vw = video.videoWidth || 720;
+  const vh = video.videoHeight || 1280;
+  if (format === "vertical") return setCanvas(1080, 1920);
+  if (format === "square") return setCanvas(1080, 1080);
+  if (format === "horizontal") return setCanvas(1920, 1080);
+  if (format === "mobile720") {
+    if (vh >= vw) return setCanvas(720, 1280);
+    return setCanvas(1280, 720);
+  }
+  const maxSide = qualitySelect.value === "high" ? 1280 : 720;
+  const ratio = vw / vh;
+  if (vw >= vh) return setCanvas(maxSide, Math.round(maxSide / ratio));
+  return setCanvas(Math.round(maxSide * ratio), maxSide);
+}
+
+function setCanvas(w, h) {
+  exportCanvas.width = Math.max(2, Math.round(w));
+  exportCanvas.height = Math.max(2, Math.round(h));
+}
+
+function getVideoBitrate() {
+  if (qualitySelect.value === "high") return 6500000;
+  if (qualitySelect.value === "medium") return 4000000;
+  return 2500000;
+}
+
+function getRecorderMimeType() {
+  const types = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  return types.find(type => MediaRecorder.isTypeSupported(type)) || "video/webm";
+}
+
+function prepareVideo(video) {
+  return new Promise((resolve, reject) => {
+    if (video.readyState >= 1) return resolve();
+    video.onloadedmetadata = () => resolve();
+    video.onerror = () => reject(new Error("Impossible de lire la vidéo"));
+  });
+}
+
+function parseSrt(srtText) {
+  const blocks = srtText.replace(/\r/g, "").trim().split(/\n\s*\n/);
+  return blocks.map(block => {
+    const lines = block.split("\n").map(line => line.trim()).filter(Boolean);
+    const timeIndex = lines.findIndex(line => line.includes("-->"));
+    if (timeIndex === -1) return null;
+    const [startRaw, endRaw] = lines[timeIndex].split("-->");
+    const text = lines.slice(timeIndex + 1).join(" ").trim();
+    return { start: timeToSeconds(startRaw), end: timeToSeconds(endRaw), text };
+  }).filter(cue => cue && !Number.isNaN(cue.start) && !Number.isNaN(cue.end) && cue.text);
+}
+
+function timeToSeconds(time) {
+  const parts = String(time).trim().replace(",", ".").split(":");
+  if (parts.length !== 3) return NaN;
+  return Number(parts[0]) * 3600 + Number(parts[1]) * 60 + Number(parts[2]);
+}
+
+function getSubtitleAt(time) {
+  const cue = subtitleCues.find(item => time >= item.start && time <= item.end);
+  return cue ? cue.text : "";
+}
+
+function wrapText(ctx, text, maxWidth, fontPx) {
+  ctx.font = `900 ${fontPx}px Arial, sans-serif`;
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let line = "";
+  words.forEach(word => {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if (line) lines.push(line);
+  return lines.slice(0, 3);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
 function cleanSrt(text) {
-  return String(text || "")
-    .replace(/\r/g, "")
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .trim();
+  return String(text || "").replace(/\r/g, "").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
 }
 
 function validateSrt() {
   const srt = cleanSrt(srtInput.value);
-
   if (!srt) {
     srtStatus.textContent = "SRT en attente.";
     srtStatus.className = "status";
     return false;
   }
-
   const valid = /\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}/.test(srt);
-
   if (!valid) {
     srtStatus.textContent = "SRT mal formaté : vérifie les timecodes.";
     srtStatus.className = "status warning";
     return false;
   }
-
   const cueCount = (srt.match(/-->/g) || []).length;
   srtStatus.textContent = `SRT valide : ${cueCount} ligne${cueCount > 1 ? "s" : ""} détectée${cueCount > 1 ? "s" : ""}.`;
   srtStatus.className = "status success";
   return true;
-}
-
-async function loadFFmpeg() {
-  if (ffmpegLoaded) return;
-
-  ffmpeg = new FFmpeg();
-
-  ffmpeg.on("progress", ({ progress }) => {
-    const value = Math.min(98, Math.max(5, Math.round(progress * 100)));
-    setProgress(value, "Traitement vidéo en cours...");
-  });
-
-  ffmpeg.on("log", ({ message: log }) => {
-    if (log && log.toLowerCase().includes("error")) console.warn(log);
-  });
-
-  setProgress(2, "Chargement du moteur vidéo...");
-
-  const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
-
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm")
-  });
-
-  ffmpegLoaded = true;
-}
-
-async function processVideo() {
-  resetDownload();
-
-  if (!selectedVideo) return showMessage("Ajoute d’abord une vidéo.", "error");
-  if (!validateSrt()) return showMessage("Colle ou génère un SRT valide avant de lancer.", "error");
-
-  const srt = cleanSrt(srtInput.value);
-
-  try {
-    lockUi(true);
-    progressBox.classList.remove("hidden");
-    showMessage("Préparation du traitement local.", "loading");
-
-    await loadFFmpeg();
-
-    const inputName = getInputName(selectedVideo.name);
-    const srtName = "subtitles.srt";
-    const outputName = "video-sous-titree.mp4";
-
-    setProgress(8, "Chargement vidéo + SRT...");
-    await ffmpeg.writeFile(inputName, await fetchFile(selectedVideo));
-    await ffmpeg.writeFile(srtName, new TextEncoder().encode(srt));
-
-    const args = [
-      "-i", inputName,
-      "-vf", buildFilter(srtName),
-      ...qualityArgs(),
-      "-c:a", "aac",
-      "-b:a", "128k",
-      "-movflags", "+faststart",
-      outputName
-    ];
-
-    setProgress(12, "Incrustation des sous-titres...");
-    await ffmpeg.exec(args);
-
-    setProgress(98, "Préparation du téléchargement...");
-    const data = await ffmpeg.readFile(outputName);
-    const blob = new Blob([data.buffer], { type: "video/mp4" });
-
-    finalUrl = URL.createObjectURL(blob);
-    downloadVideoBtn.href = finalUrl;
-    downloadVideoBtn.classList.remove("hidden");
-
-    setProgress(100, "Terminé.");
-    showMessage(`Vidéo finale prête : ${(blob.size / 1024 / 1024).toFixed(1)} Mo.`, "success");
-
-    await safeDelete(inputName);
-    await safeDelete(srtName);
-    await safeDelete(outputName);
-  } catch (error) {
-    console.error(error);
-    showMessage("Erreur pendant l’export. Essaie une vidéo plus courte ou plus légère.", "error");
-    setProgress(0, "Échec.");
-  } finally {
-    lockUi(false);
-  }
-}
-
-function buildFilter(srtName) {
-  const size = Number(fontSize.value) || 30;
-  const subtitle = `subtitles=${srtName}:force_style='FontName=Arial,FontSize=${size},PrimaryColour=&H00FFFFFF&,OutlineColour=&H00000000&,BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=70'`;
-  const format = formatSelect.value;
-
-  if (format === "vertical") {
-    return `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,${subtitle}`;
-  }
-
-  if (format === "square") {
-    return `scale=1080:1080:force_original_aspect_ratio=decrease,pad=1080:1080:(ow-iw)/2:(oh-ih)/2,${subtitle}`;
-  }
-
-  if (format === "horizontal") {
-    return `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,${subtitle}`;
-  }
-
-  return subtitle;
-}
-
-function qualityArgs() {
-  const quality = qualitySelect.value;
-
-  if (quality === "fast") return ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "30"];
-  if (quality === "small") return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "34"];
-  return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "28"];
-}
-
-function getInputName(name) {
-  const ext = String(name || "video.mp4").split(".").pop().toLowerCase() || "mp4";
-  return `source.${ext}`;
-}
-
-async function safeDelete(name) {
-  try {
-    await ffmpeg.deleteFile(name);
-  } catch (error) {
-    console.warn(`Suppression impossible : ${name}`);
-  }
 }
 
 function normalizeUrl(url) {
@@ -383,7 +412,7 @@ function lockUi(locked) {
   fontSize.disabled = locked;
   qualitySelect.disabled = locked;
   formatSelect.disabled = locked;
-  startBtn.textContent = locked ? "Traitement en cours..." : "Incruster et compresser";
+  startBtn.textContent = locked ? "Export en cours..." : "Exporter avec sous-titres";
 }
 
 function resetDownload() {
@@ -403,6 +432,10 @@ function downloadBlob(blob, filename) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function formatMo(bytes) {
+  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
 }
 
 validateSrt();
