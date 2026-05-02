@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - export local fluide</title>
   <meta name="description" content="Colle ou génère un SRT, puis exporte une vidéo sous-titrée en local sur téléphone." />
-  <link rel="stylesheet" href="style.css?v=20260502-2005" />
+  <link rel="stylesheet" href="style.css?v=20260502-2025" />
 </head>
 <body>
   <main class="app">
@@ -13,7 +13,7 @@
       <div class="logo">SRT</div>
       <div class="pill">Mode local ultra fluide</div>
       <h1>SRT Studio</h1>
-      <p>Render est retiré. L’application crée une seule vidéo locale avec un mode plus fluide et un téléchargement manuel.</p>
+      <p>Render est retiré. L’application crée une seule vidéo locale, puis tu peux la visualiser et l’enregistrer directement.</p>
     </header>
 
     <section class="card strong">
@@ -21,7 +21,7 @@
       <div class="steps">
         <div><span>1</span><p>Charge la vidéo originale.</p></div>
         <div><span>2</span><p>Colle ton SRT ou génère-le avec l’API audio.</p></div>
-        <div><span>3</span><p>Crée un seul fichier WebM puis télécharge-le.</p></div>
+        <div><span>3</span><p>Crée la vidéo, regarde le résultat, puis enregistre-la.</p></div>
       </div>
     </section>
 
@@ -104,13 +104,21 @@ Deuxième sous-titre"></textarea>
         <progress id="progressBar" value="0" max="100"></progress>
       </div>
       <div id="downloadsBox" class="actions"></div>
-      <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.webm">Télécharger la vidéo</a>
+      <button id="saveVideoBtn" class="btn primary hidden">Enregistrer sur le téléphone</button>
+      <button id="shareVideoBtn" class="btn secondary hidden">Partager / envoyer</button>
+      <a id="downloadVideoBtn" class="hidden" href="#" download="video-sous-titree.webm">Téléchargement technique</a>
       <div id="message" class="status">En attente.</div>
-      <p class="info">Le téléchargement ne démarre plus automatiquement : tu appuies sur le bouton quand la vidéo est prête.</p>
+      <p class="info">Quand la vidéo est prête, elle apparaît juste en dessous. Tu peux la regarder avant d’enregistrer.</p>
+    </section>
+
+    <section id="resultBox" class="card previewCard hidden">
+      <h2>5. Résultat final</h2>
+      <p class="info">Lis la vidéo ici. Si le résultat est bon, appuie sur “Enregistrer sur le téléphone”.</p>
+      <video id="resultVideo" class="previewVideo" playsinline controls preload="metadata"></video>
     </section>
 
     <section class="card previewCard">
-      <h2>Prévisualisation / source</h2>
+      <h2>Source utilisée pendant l’export</h2>
       <p class="info">Laisse cette vidéo chargée et garde l’écran allumé pendant l’export.</p>
       <video id="hiddenVideo" class="previewVideo" playsinline muted controls preload="metadata"></video>
     </section>
@@ -123,6 +131,6 @@ Deuxième sous-titre"></textarea>
     </section>
   </main>
   <script src="https://unpkg.com/fix-webm-duration@1.0.6/fix-webm-duration.js"></script>
-  <script src="script.js?v=20260502-2005"></script>
+  <script src="script.js?v=20260502-2025"></script>
 </body>
 </html>
