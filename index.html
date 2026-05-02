@@ -4,30 +4,30 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - sous-titres vidéo</title>
-  <meta name="description" content="Application gratuite pour coller un SRT, générer un SRT via API au choix, incruster les sous-titres dans une vidéo et exporter en local." />
-  <link rel="stylesheet" href="style.css?v=20260502-1320" />
+  <meta name="description" content="Application gratuite pour générer un SRT depuis un audio, coller un SRT, puis exporter une vidéo sous-titrée en local." />
+  <link rel="stylesheet" href="style.css?v=20260502-1340" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Sans Render - Local compatible</div>
+      <div class="pill">Sans Render - API audio uniquement</div>
       <h1>SRT Studio</h1>
-      <p>Charge ta vidéo, colle ton SRT ou génère-le via ton Worker Cloudflare, puis exporte localement avec sous-titres incrustés.</p>
+      <p>Génère ton SRT depuis un audio léger ou colle ton SRT, puis exporte ta vidéo sous-titrée en local.</p>
     </header>
 
     <section class="card strong">
       <h2>Mode simple</h2>
       <div class="steps">
-        <div><span>1</span><p>Ajoute ta vidéo MP4.</p></div>
-        <div><span>2</span><p>Colle ton SRT ou génère-le avec l’API.</p></div>
+        <div><span>1</span><p>Audio léger pour générer le SRT.</p></div>
+        <div><span>2</span><p>Vidéo originale pour l’export.</p></div>
         <div><span>3</span><p>Export local compatible mobile.</p></div>
       </div>
     </section>
 
     <section class="card apiCard">
       <h2>Option API SRT</h2>
-      <p class="info">À utiliser seulement quand tu veux créer automatiquement le SRT avec ton Worker Cloudflare. Ta clé OpenAI reste côté Cloudflare, jamais dans GitHub.</p>
+      <p class="info">Le générateur SRT utilise uniquement un fichier audio. Ta clé OpenAI reste côté Cloudflare, jamais dans GitHub.</p>
 
       <label for="workerUrl">Lien Cloudflare Worker</label>
       <input id="workerUrl" type="url" value="https://srt-openai-worker.skypieachannel.workers.dev" autocomplete="off" />
@@ -37,14 +37,6 @@
         <input id="apiAudioFile" class="nativeFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" />
         <small id="apiAudioName">Aucun audio sélectionné</small>
       </div>
-
-      <div class="nativePicker">
-        <label for="apiVideoFile">Vidéo pour générer le SRT</label>
-        <input id="apiVideoFile" class="nativeFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
-        <small id="apiVideoName">Aucune vidéo API sélectionnée</small>
-      </div>
-
-      <button id="useOriginalForApiBtn" class="btn secondary">Utiliser la vidéo originale pour l’API</button>
 
       <div class="actions twoActions">
         <button id="saveWorkerBtn" class="btn secondary">Sauvegarder Worker</button>
@@ -61,12 +53,12 @@
         <input id="videoFile" class="nativeFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
         <small id="videoName">Aucune vidéo sélectionnée</small>
       </div>
-      <p class="info">Ce mode lit la vidéo et enregistre le résultat, donc il accepte mieux les grosses vidéos. La qualité baisse un peu, comme avant.</p>
+      <p class="info">La vidéo ne part pas à l’API. Elle sert seulement à l’export local sous-titré.</p>
     </section>
 
     <section class="card">
       <h2>2. SRT à incruster</h2>
-      <textarea id="srtInput" placeholder="Colle ton SRT ici ou génère-le avec l’option API :
+      <textarea id="srtInput" placeholder="Colle ton SRT ici ou génère-le avec l’option API audio :
 
 1
 00:00:00,000 --> 00:00:02,000
@@ -130,10 +122,10 @@ Deuxième sous-titre"></textarea>
 
     <section class="card warning">
       <h2>À savoir</h2>
-      <p>Render est supprimé. L’export local compatible mobile enregistre la vidéo pendant sa lecture : c’est plus fiable pour les gros fichiers, mais la qualité peut baisser un peu.</p>
+      <p>Pour retrouver la vitesse d’avant, envoie à l’API un audio léger. La grosse vidéo reste en local pour l’export sous-titré.</p>
     </section>
   </main>
 
-  <script type="module" src="script.js?v=20260502-1320"></script>
+  <script src="script.js?v=20260502-1340"></script>
 </body>
 </html>
