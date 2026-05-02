@@ -3,31 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SRT Studio - sous-titres vidéo</title>
-  <meta name="description" content="Génère un SRT depuis un audio, incruste les sous-titres en local, puis finalise un vrai MP4 propre via Render." />
-  <link rel="stylesheet" href="style.css?v=20260502-1700" />
+  <title>SRT Studio - local</title>
+  <meta name="description" content="Génère ou colle un SRT, prévisualise les sous-titres sur la vidéo, puis exporte en local sur téléphone." />
+  <link rel="stylesheet" href="style.css?v=20260502-1815" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Local + Render MP4 propre</div>
+      <div class="pill">Mode local qualité</div>
       <h1>SRT Studio</h1>
-      <p>Génère ton SRT depuis un audio léger, incruste les sous-titres en local, puis Render finalise un vrai MP4 compatible CapCut et TikTok.</p>
+      <p>Charge ta vidéo, colle ou génère ton SRT, vérifie l’aperçu, puis exporte en local. Render est retiré.</p>
     </header>
 
     <section class="card strong">
-      <h2>Mode final</h2>
+      <h2>Mode local stable</h2>
       <div class="steps">
-        <div><span>1</span><p>Audio léger pour générer le SRT.</p></div>
-        <div><span>2</span><p>Vidéo sous-titrée créée en local.</p></div>
-        <div><span>3</span><p>Render renvoie un MP4 propre.</p></div>
+        <div><span>1</span><p>Charge la vidéo originale.</p></div>
+        <div><span>2</span><p>Colle ton SRT ou génère-le avec l’API audio.</p></div>
+        <div><span>3</span><p>Exporte en 1 fichier ou en 3 parties.</p></div>
       </div>
     </section>
 
     <section class="card apiCard">
       <h2>Option API SRT</h2>
-      <p class="info">Le générateur SRT utilise uniquement un fichier audio. Ta clé OpenAI reste côté Cloudflare, jamais dans GitHub.</p>
+      <p class="info">Utilise cette partie seulement si tu veux créer le SRT depuis un audio. Si tu as déjà le SRT, colle-le directement plus bas.</p>
       <label for="workerUrl">Lien Cloudflare Worker</label>
       <input id="workerUrl" type="url" value="https://srt-openai-worker.skypieachannel.workers.dev" autocomplete="off" />
       <div class="nativePicker">
@@ -42,18 +42,6 @@
       <div id="apiStatus" class="status">API en attente.</div>
     </section>
 
-    <section class="card renderCard">
-      <h2>Render MP4 propre</h2>
-      <p class="info">Quand l’export local est terminé, l’application envoie automatiquement la vidéo temporaire à Render pour créer un vrai MP4 H.264/AAC.</p>
-      <label for="renderUrl">Lien Render backend</label>
-      <input id="renderUrl" type="url" placeholder="https://ton-service.onrender.com" autocomplete="off" />
-      <div class="actions twoActions">
-        <button id="saveRenderBtn" class="btn secondary">Sauvegarder Render</button>
-        <button id="testRenderBtn" class="btn secondary">Tester Render</button>
-      </div>
-      <div id="renderStatus" class="status">Render en attente.</div>
-    </section>
-
     <section class="card">
       <h2>1. Vidéo originale</h2>
       <div class="nativePicker bigPicker">
@@ -61,12 +49,12 @@
         <input id="videoFile" class="nativeFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
         <small id="videoName">Aucune vidéo sélectionnée</small>
       </div>
-      <p class="info">La vidéo originale reste dans ton téléphone pendant la création des sous-titres.</p>
+      <p class="info">La vidéo reste sur ton téléphone. L’app filme l’aperçu en local.</p>
     </section>
 
     <section class="card">
-      <h2>2. SRT à incruster</h2>
-      <textarea id="srtInput" placeholder="Colle ton SRT ici ou génère-le avec l’option API audio :
+      <h2>2. SRT généré ou collé</h2>
+      <textarea id="srtInput" placeholder="Colle ton SRT ici :
 
 1
 00:00:00,000 --> 00:00:02,000
@@ -84,17 +72,19 @@ Deuxième sous-titre"></textarea>
     </section>
 
     <section class="card">
-      <h2>3. Réglages rapides</h2>
+      <h2>3. Réglages qualité</h2>
       <label for="fontSize">Taille des sous-titres</label>
       <input id="fontSize" type="range" min="18" max="48" value="30" />
       <div class="rangeValue"><span>Petit</span><strong id="fontSizeValue">30</strong><span>Grand</span></div>
-      <label for="qualitySelect">Qualité export local temporaire</label>
+
+      <label for="qualitySelect">Qualité export local</label>
       <select id="qualitySelect">
-        <option value="mobile">Mobile léger - 720p, rapide</option>
+        <option value="mobile">Mobile léger - plus stable</option>
         <option value="medium" selected>Bonne qualité - recommandé</option>
-        <option value="high">Haute qualité - fichier plus lourd</option>
+        <option value="high">Haute qualité - plus lourd</option>
       </select>
-      <label for="formatSelect">Format final</label>
+
+      <label for="formatSelect">Format vidéo</label>
       <select id="formatSelect">
         <option value="keep" selected>Garder le format original</option>
         <option value="vertical">Vertical 1080x1920</option>
@@ -105,21 +95,22 @@ Deuxième sous-titre"></textarea>
     </section>
 
     <section class="card exportCard">
-      <h2>4. Export</h2>
-      <button id="startBtn" class="btn secondary">Exporter local seulement</button>
-      <button id="finalMp4Btn" class="btn primary">Exporter MP4 final CapCut / TikTok</button>
+      <h2>4. Export local</h2>
+      <button id="startBtn" class="btn primary">Exporter local en 1 vidéo</button>
+      <button id="splitExportBtn" class="btn secondary">Exporter local en 3 parties</button>
       <div id="progressBox" class="progressBox hidden">
         <div class="progressTop"><span id="progressText">Préparation...</span><strong id="progressPercent">0%</strong></div>
         <progress id="progressBar" value="0" max="100"></progress>
       </div>
-      <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-temporaire.webm">Télécharger vidéo temporaire</a>
-      <a id="downloadFinalMp4Btn" class="downloadLink hidden" href="#" download="video-final-capcut-tiktok.mp4">Télécharger MP4 final</a>
+      <div id="downloadsBox" class="actions"></div>
+      <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.webm">Télécharger vidéo locale</a>
       <div id="message" class="status">En attente.</div>
+      <p class="info">Si le fichier est en WebM, convertis-le ensuite en MP4 avec ton convertisseur en ligne.</p>
     </section>
 
     <section class="card previewCard">
-      <h2>Prévisualisation / export</h2>
-      <p class="info">La vidéo reste visible pendant l’export pour éviter les blocages Android.</p>
+      <h2>Prévisualisation / capture</h2>
+      <p class="info">Laisse cette vidéo visible et garde l’écran allumé pendant l’export.</p>
       <video id="hiddenVideo" class="previewVideo" playsinline muted controls preload="metadata"></video>
     </section>
 
@@ -127,9 +118,9 @@ Deuxième sous-titre"></textarea>
 
     <section class="card warning">
       <h2>À savoir</h2>
-      <p>Le fichier local peut avoir une durée fausse sur Android. Le bouton MP4 final passe par Render pour rendre le fichier propre.</p>
+      <p>Tout est local. Aucun Render. Pour un MP4 final, utilise un convertisseur en ligne ou CapCut après l’export.</p>
     </section>
   </main>
-  <script src="script.js?v=20260502-1700"></script>
+  <script src="script.js?v=20260502-1815"></script>
 </body>
 </html>
