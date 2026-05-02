@@ -37,6 +37,7 @@ let localUrl = null;
 let subtitleCues = [];
 let exportRunning = false;
 let drawFrameId = null;
+let lastProgressUpdate = 0;
 
 hiddenVideo.muted = true;
 hiddenVideo.playsInline = true;
@@ -77,7 +78,7 @@ videoFile.addEventListener("change", () => {
   hiddenVideo.src = videoObjectUrl;
   hiddenVideo.muted = true;
   hiddenVideo.load();
-  showMessage("Vidéo prête. Colle ton SRT puis crée la vidéo fluide.", "success");
+  showMessage("Vidéo prête. Colle ton SRT puis crée la vidéo ultra fluide.", "success");
 });
 
 srtInput.addEventListener("input", validateSrt);
@@ -105,7 +106,8 @@ copyBtn.addEventListener("click", async () => {
 downloadSrtBtn.addEventListener("click", () => {
   const srt = cleanSrt(srtInput.value);
   if (!srt) return showMessage("Aucun SRT à télécharger.", "error");
-  downloadBlob(new Blob([srt], { type: "text/plain;charset=utf-8" }), "sous-titres.srt");
+  const blob = new Blob([srt], { type: "text/plain;charset=utf-8" });
+  triggerDownload(blob, "sous-titres.srt");
   showMessage("SRT téléchargé.", "success");
 });
 
@@ -149,7 +151,7 @@ async function exportOneLocalVideo() {
     exportRunning = true;
     lockUi(true);
     progressBox.classList.remove("hidden");
-    showMessage("Création d’un seul fichier fluide. Garde l’écran allumé.", "loading");
+    showMessage("Création d’un seul fichier ultra fluide. Garde l’écran allumé.", "loading");
 
     await prepareVideo(hiddenVideo);
     const duration = hiddenVideo.duration;
@@ -157,9 +159,9 @@ async function exportOneLocalVideo() {
 
     const blob = await recordFullVideo(duration);
     const fixedBlob = await fixDurationIfNeeded(blob, duration * 1000);
-    localBlobReady(fixedBlob, "video-sous-titree-fluide.webm");
+    localBlobReady(fixedBlob, "video-sous-titree-ultra-fluide.webm");
     setProgress(100, "Vidéo terminée.");
-    showMessage(`Vidéo fluide prête : ${formatMo(fixedBlob.size)}.`, "success");
+    showMessage(`Vidéo prête. Appuie sur “Télécharger la vidéo” : ${formatMo(fixedBlob.size)}.`, "success");
   } catch (error) {
     console.error(error);
     showMessage(`Erreur export : ${error.message || "capture impossible."}`, "error");
@@ -202,7 +204,7 @@ async function recordFullVideo(duration) {
   const recorder = new MediaRecorder(mixedStream, {
     mimeType,
     videoBitsPerSecond: getVideoBitrate(),
-    audioBitsPerSecond: 160000
+    audioBitsPerSecond: 128000
   });
   const chunks = [];
 
@@ -221,8 +223,12 @@ async function recordFullVideo(duration) {
   await new Promise(resolve => {
     const draw = () => {
       drawOneFrame();
-      const progress = Math.min(100, Math.round((hiddenVideo.currentTime / duration) * 100));
-      setProgress(progress, "Création de la vidéo fluide...");
+      const now = performance.now();
+      if (now - lastProgressUpdate > 500) {
+        const progress = Math.min(100, Math.round((hiddenVideo.currentTime / duration) * 100));
+        setProgress(progress, "Création de la vidéo ultra fluide...");
+        lastProgressUpdate = now;
+      }
       if (hiddenVideo.ended || hiddenVideo.currentTime >= duration) return resolve();
       drawFrameId = requestAnimationFrame(draw);
     };
@@ -250,7 +256,7 @@ async function fixDurationIfNeeded(blob, durationMs) {
 function drawOneFrame() {
   const ctx = exportCanvas.getContext("2d", { alpha: false });
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
+  ctx.imageSmoothingQuality = "medium";
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
   drawVideoContain(ctx, hiddenVideo, exportCanvas.width, exportCanvas.height);
@@ -272,28 +278,22 @@ function drawSubtitle(ctx, text) {
   if (!text) return;
   const fontPx = Math.max(18, Math.round((Number(fontSize.value) || 30) * (exportCanvas.width / 720)));
   const maxWidth = Math.round(exportCanvas.width * 0.86);
-  const lines = wrapText(ctx, text, maxWidth, fontPx).slice(0, 3);
-  const lineHeight = Math.round(fontPx * 1.25);
+  const lines = wrapText(ctx, text, maxWidth, fontPx).slice(0, 2);
+  const lineHeight = Math.round(fontPx * 1.22);
   const y = exportCanvas.height - (lines.length * lineHeight) - Math.round(exportCanvas.height * 0.08);
 
   ctx.font = `900 ${fontPx}px Arial, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.lineWidth = Math.max(5, Math.round(fontPx / 5));
+  ctx.lineWidth = Math.max(4, Math.round(fontPx / 6));
   ctx.strokeStyle = "#000";
   ctx.fillStyle = "#fff";
-  ctx.shadowColor = "rgba(0,0,0,0.9)";
-  ctx.shadowBlur = Math.round(fontPx * 0.15);
-  ctx.shadowOffsetY = Math.round(fontPx * 0.06);
 
   lines.forEach((line, index) => {
     const textY = y + index * lineHeight;
     ctx.strokeText(line, exportCanvas.width / 2, textY);
     ctx.fillText(line, exportCanvas.width / 2, textY);
   });
-
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetY = 0;
 }
 
 function setupCanvasSize(video) {
@@ -301,9 +301,9 @@ function setupCanvasSize(video) {
   const vw = video.videoWidth || 720;
   const vh = video.videoHeight || 1280;
 
-  if (format === "vertical") return setCanvas(exportCanvas, 1080, 1920);
-  if (format === "square") return setCanvas(exportCanvas, 1080, 1080);
-  if (format === "horizontal") return setCanvas(exportCanvas, 1920, 1080);
+  if (format === "vertical") return setCanvas(exportCanvas, 720, 1280);
+  if (format === "square") return setCanvas(exportCanvas, 720, 720);
+  if (format === "horizontal") return setCanvas(exportCanvas, 1280, 720);
   if (format === "mobile720") return vh >= vw ? setCanvas(exportCanvas, 720, 1280) : setCanvas(exportCanvas, 1280, 720);
 
   const maxSide = getMaxSideForQuality();
@@ -313,17 +313,17 @@ function setupCanvasSize(video) {
 }
 
 function getMaxSideForQuality() {
-  if (qualitySelect.value === "high") return 1920;
-  if (qualitySelect.value === "smooth134") return 1280;
-  if (qualitySelect.value === "medium") return 1280;
+  if (qualitySelect.value === "high") return 1280;
+  if (qualitySelect.value === "smooth134") return 960;
+  if (qualitySelect.value === "medium") return 1080;
   return 720;
 }
 
 function getVideoBitrate() {
-  if (qualitySelect.value === "high") return 12000000;
-  if (qualitySelect.value === "smooth134") return 5500000;
-  if (qualitySelect.value === "medium") return 4500000;
-  return 2500000;
+  if (qualitySelect.value === "high") return 7500000;
+  if (qualitySelect.value === "smooth134") return 4200000;
+  if (qualitySelect.value === "medium") return 5000000;
+  return 2200000;
 }
 
 function getRecorderMimeType() {
@@ -453,7 +453,7 @@ function lockUi(locked) {
   fontSize.disabled = locked;
   qualitySelect.disabled = locked;
   formatSelect.disabled = locked;
-  startBtn.textContent = locked ? "Traitement..." : "Créer 1 vidéo fluide";
+  startBtn.textContent = locked ? "Traitement..." : "Créer 1 vidéo ultra fluide";
 }
 
 function resetDownload() {
@@ -470,12 +470,11 @@ function localBlobReady(blob, filename) {
   localUrl = URL.createObjectURL(blob);
   downloadVideoBtn.href = localUrl;
   downloadVideoBtn.download = filename;
-  downloadVideoBtn.textContent = `Télécharger ${filename} - ${formatMo(blob.size)}`;
+  downloadVideoBtn.textContent = `Télécharger la vidéo - ${formatMo(blob.size)}`;
   downloadVideoBtn.classList.remove("hidden");
-  downloadBlob(blob, filename);
 }
 
-function downloadBlob(blob, filename) {
+function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
