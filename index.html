@@ -3,100 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sous-titres IA</title>
-  <link rel="stylesheet" href="style.css?v=20260502-0940" />
+  <title>SRT Studio - sous-titres vidéo</title>
+  <meta name="description" content="Application gratuite pour coller un SRT, incruster les sous-titres dans une vidéo et compresser en local dans le navigateur." />
+  <link rel="stylesheet" href="style.css?v=20260502-1200" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <h1>Sous-titres IA</h1>
-      <p>Ajoute une vidéo, génère les sous-titres avec l’API ou colle directement ton SRT déjà prêt.</p>
+      <div class="pill">Sans Render - Sans API obligatoire</div>
+      <h1>SRT Studio</h1>
+      <p>Charge ta vidéo, colle ton SRT, incruste les sous-titres et récupère un MP4 compressé directement depuis ton téléphone.</p>
     </header>
 
-    <section class="card qualityCard">
-      <h2>Nouveau : lire un SRT collé</h2>
-      <p>
-        Si tu as déjà tes sous-titres copiés, colle-les dans la zone SRT puis appuie sur “Lire le SRT collé dans l’aperçu”. L’application affichera les sous-titres sans appeler l’API.
-      </p>
-      <div class="qualitySteps">
-        <div>1. Charge la vidéo</div>
-        <div>2. Colle ton SRT ou génère-le</div>
-        <div>3. Appuie sur Lire le SRT collé</div>
-        <div>4. Crée 3 vidéos à recoller dans CapCut</div>
+    <section class="card strong">
+      <h2>Mode simple</h2>
+      <div class="steps">
+        <div><span>1</span><p>Ajoute ta vidéo MP4.</p></div>
+        <div><span>2</span><p>Colle ton SRT déjà prêt.</p></div>
+        <div><span>3</span><p>Lance l’incrustation locale.</p></div>
       </div>
     </section>
 
-    <section class="card warning">
-      <h2>Important</h2>
-      <p>
-        Pour voir la mise à jour, recharge complètement la page si ton téléphone garde l’ancienne version.
-      </p>
+    <section class="card">
+      <h2>1. Vidéo originale</h2>
+      <label class="fileBox" for="videoFile">
+        <input id="videoFile" type="file" accept="video/*" />
+        <strong>Choisir une vidéo</strong>
+        <small id="videoName">Aucune vidéo sélectionnée</small>
+      </label>
+      <p class="info">Conseil : commence avec une vidéo courte de test, entre 10 et 30 secondes.</p>
     </section>
 
     <section class="card">
-      <h2>1. Lien Cloudflare Worker</h2>
-      <label for="workerUrl">URL du Worker</label>
-      <input id="workerUrl" type="url" value="https://srt-openai-worker.skypieachannel.workers.dev" autocomplete="off" />
-      <button id="saveWorkerBtn" class="btn secondary">Sauvegarder le lien Worker</button>
-      <p class="info">Utilise cette partie seulement si tu veux générer les sous-titres avec l’API.</p>
-    </section>
-
-    <section class="card">
-      <h2>2. Ajouter les fichiers</h2>
-      <label for="audioFile">Audio utilisé pour créer les sous-titres avec l’API</label>
-      <input id="audioFile" type="file" accept="audio/*" />
-
-      <div class="compressBox">
-        <button id="compressAudioBtn" class="btn secondary">Compresser l’audio</button>
-        <div id="audioInfo" class="miniStatus">Aucun audio compressé.</div>
-        <p class="info">Si tu colles déjà un SRT, tu n’as pas besoin d’ajouter d’audio.</p>
-      </div>
-
-      <label for="videoFile">Vidéo MP4 originale pour l’aperçu</label>
-      <input id="videoFile" type="file" accept="video/*" />
-
-      <button id="loadVideoBtn" class="btn">Charger la vidéo originale</button>
-    </section>
-
-    <section class="card">
-      <h2>3. Génération API</h2>
-      <button id="generateBtn" class="btn primary">Générer les sous-titres SRT avec l’API</button>
-      <div id="status" class="status">En attente.</div>
-    </section>
-
-    <section class="card">
-      <h2>4. Aperçu propre sur ton MP4 original</h2>
-      <div class="videoBox">
-        <video id="videoPreview" controls playsinline></video>
-        <div id="subtitleOverlay" class="subtitleOverlay"></div>
-      </div>
-      <p class="info">Les sous-titres collés ou générés apparaissent ici.</p>
-    </section>
-
-    <section class="card">
-      <h2>5. Réglage des sous-titres</h2>
-      <label for="fontSize">Taille du texte</label>
-      <select id="fontSize">
-        <option value="34">Petit</option>
-        <option value="42" selected>Moyen</option>
-        <option value="52">Grand</option>
-      </select>
-
-      <label for="subtitlePosition">Position</label>
-      <select id="subtitlePosition">
-        <option value="bottom" selected>Bas de la vidéo</option>
-        <option value="middle">Milieu de la vidéo</option>
-        <option value="top">Haut de la vidéo</option>
-      </select>
-    </section>
-
-    <section class="card qualityCard">
-      <h2>6. SRT généré ou collé</h2>
-      <p>
-        Colle ici un fichier SRT déjà prêt. Ensuite appuie sur le bouton vert pour l’afficher dans l’aperçu.
-      </p>
-      <textarea id="srtOutput" placeholder="Colle ton SRT ici, exemple :
+      <h2>2. SRT à incruster</h2>
+      <textarea id="srtInput" placeholder="Colle ton SRT ici :
 
 1
 00:00:00,000 --> 00:00:02,000
@@ -105,41 +46,61 @@ Premier sous-titre
 2
 00:00:02,000 --> 00:00:04,000
 Deuxième sous-titre"></textarea>
+
       <div class="actions">
-        <button id="applySrtBtn" class="btn primary">Lire le SRT collé dans l’aperçu</button>
-        <button id="copyBtn" class="btn secondary">Copier le SRT</button>
-        <button id="downloadBtn" class="btn secondary">Télécharger le SRT</button>
+        <button id="pasteBtn" class="btn secondary">Coller</button>
+        <button id="copyBtn" class="btn secondary">Copier SRT</button>
+        <button id="downloadSrtBtn" class="btn secondary">Télécharger SRT</button>
       </div>
+
+      <div id="srtStatus" class="status">SRT en attente.</div>
     </section>
 
-    <section class="card qualityCard">
-      <h2>7. Télécharger l’aperçu en 3 vidéos</h2>
-      <p>
-        L’app capture l’aperçu avec les sous-titres visibles, puis sauvegarde 3 fichiers séparés dans ton téléphone.
-      </p>
-      <button id="burnBtn" class="btn primary">Créer 3 vidéos de l’aperçu</button>
-      <progress id="exportProgress" value="0" max="100"></progress>
-      <a id="downloadVideoLink" class="downloadLink" href="#" download="apercu-sous-titre.webm">Ouvrir / télécharger la vidéo de l’aperçu</a>
+    <section class="card">
+      <h2>3. Réglages rapides</h2>
+
+      <label for="fontSize">Taille des sous-titres</label>
+      <input id="fontSize" type="range" min="18" max="48" value="30" />
+      <div class="rangeValue"><span>Petit</span><strong id="fontSizeValue">30</strong><span>Grand</span></div>
+
+      <label for="qualitySelect">Compression</label>
+      <select id="qualitySelect">
+        <option value="fast">Rapide - test</option>
+        <option value="balanced" selected>Équilibré - recommandé</option>
+        <option value="small">Plus léger - qualité réduite</option>
+      </select>
+
+      <label for="formatSelect">Format final</label>
+      <select id="formatSelect">
+        <option value="keep" selected>Garder le format original</option>
+        <option value="vertical">Vertical 1080x1920</option>
+        <option value="square">Carré 1080x1080</option>
+        <option value="horizontal">Horizontal 1920x1080</option>
+      </select>
     </section>
 
-    <section class="card exportCard warningExport">
-      <h2>8. Render FFmpeg</h2>
-      <p class="info">
-        Option secondaire. Pour les très grosses vidéos, privilégie le téléchargement de l’aperçu.
-      </p>
-      <label for="renderUrl">URL Render backend</label>
-      <input id="renderUrl" type="url" value="https://srt-sous-titres.onrender.com" autocomplete="off" />
-      <button id="saveRenderBtn" class="btn secondary">Sauvegarder le lien Render</button>
-      <button id="renderExportBtn" class="btn secondary">Créer MP4 avec Render FFmpeg</button>
-      <div id="renderStatus" class="status">Render en attente.</div>
-      <a id="renderDownloadLink" class="downloadLink" href="#" download="video-sous-titree-render.mp4">Télécharger le MP4 Render</a>
+    <section class="card exportCard">
+      <h2>4. Export MP4</h2>
+      <button id="startBtn" class="btn primary">Incruster et compresser</button>
+
+      <div id="progressBox" class="progressBox hidden">
+        <div class="progressTop">
+          <span id="progressText">Préparation...</span>
+          <strong id="progressPercent">0%</strong>
+        </div>
+        <progress id="progressBar" value="0" max="100"></progress>
+      </div>
+
+      <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.mp4">Télécharger la vidéo finale</a>
+      <div id="message" class="status">En attente.</div>
+    </section>
+
+    <section class="card warning">
+      <h2>À savoir</h2>
+      <p>Cette version travaille en local avec FFmpeg dans le navigateur. C’est gratuit, mais sur téléphone il faut éviter les vidéos trop longues ou trop lourdes.</p>
     </section>
   </main>
 
-  <script src="render-url-fix.js?v=20260502-0940"></script>
-  <script src="script.js?v=20260502-0940"></script>
-  <script src="render-chunk-client.js?v=20260502-0940"></script>
-  <script src="preview-download.js?v=20260502-0940"></script>
-  <script src="download-fix.js?v=20260502-0940"></script>
+  <script type="module" src="script.js?v=20260502-1200"></script>
 </body>
 </html>
