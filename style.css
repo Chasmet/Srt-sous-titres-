@@ -356,9 +356,19 @@ progress {
   color: #031018;
 }
 
-.hidden,
-.hiddenMedia {
+.hidden {
   display: none !important;
+}
+
+.hiddenMedia {
+  position: fixed !important;
+  left: -99999px !important;
+  top: -99999px !important;
+  width: 2px !important;
+  height: 2px !important;
+  opacity: 0.01 !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
 }
 
 @media (min-width: 640px) {
