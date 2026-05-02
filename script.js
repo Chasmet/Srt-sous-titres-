@@ -1,6 +1,13 @@
 import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.15";
 import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
 
+const workerUrl = document.getElementById("workerUrl");
+const audioFile = document.getElementById("audioFile");
+const audioName = document.getElementById("audioName");
+const saveWorkerBtn = document.getElementById("saveWorkerBtn");
+const generateSrtBtn = document.getElementById("generateSrtBtn");
+const apiStatus = document.getElementById("apiStatus");
+
 const videoFile = document.getElementById("videoFile");
 const videoName = document.getElementById("videoName");
 const srtInput = document.getElementById("srtInput");
@@ -23,7 +30,38 @@ const message = document.getElementById("message");
 let ffmpeg = null;
 let ffmpegLoaded = false;
 let selectedVideo = null;
+let selectedApiFile = null;
 let finalUrl = null;
+
+const savedWorker = localStorage.getItem("srt_app_worker_url");
+if (savedWorker) workerUrl.value = savedWorker;
+
+saveWorkerBtn.addEventListener("click", () => {
+  const url = normalizeUrl(workerUrl.value);
+  if (!url) return showApiStatus("Lien Worker invalide. Il doit commencer par https://", "error");
+  localStorage.setItem("srt_app_worker_url", url);
+  workerUrl.value = url;
+  showApiStatus("Worker sauvegardé sur ce téléphone.", "success");
+});
+
+audioFile.addEventListener("change", () => {
+  selectedApiFile = audioFile.files && audioFile.files[0] ? audioFile.files[0] : null;
+
+  if (!selectedApiFile) {
+    audioName.textContent = "Aucun fichier API sélectionné";
+    return;
+  }
+
+  audioName.textContent = `${selectedApiFile.name} - ${(selectedApiFile.size / 1024 / 1024).toFixed(1)} Mo`;
+
+  if (selectedApiFile.size > 25 * 1024 * 1024) {
+    showApiStatus("Fichier lourd pour l’API. Essaie un audio plus court si le Worker refuse.", "warning");
+  } else {
+    showApiStatus("Fichier prêt pour génération SRT.", "success");
+  }
+});
+
+generateSrtBtn.addEventListener("click", generateSrtWithApi);
 
 videoFile.addEventListener("change", () => {
   selectedVideo = videoFile.files && videoFile.files[0] ? videoFile.files[0] : null;
@@ -83,6 +121,50 @@ downloadSrtBtn.addEventListener("click", () => {
 });
 
 startBtn.addEventListener("click", processVideo);
+
+async function generateSrtWithApi() {
+  const url = normalizeUrl(workerUrl.value || localStorage.getItem("srt_app_worker_url") || "");
+
+  if (!url) return showApiStatus("Ajoute ton lien Worker Cloudflare.", "error");
+  if (!selectedApiFile) return showApiStatus("Ajoute un audio ou une vidéo pour générer le SRT.", "error");
+
+  try {
+    localStorage.setItem("srt_app_worker_url", url);
+    workerUrl.value = url;
+
+    generateSrtBtn.disabled = true;
+    generateSrtBtn.textContent = "Génération en cours...";
+    showApiStatus("Envoi au Worker Cloudflare. Ne ferme pas la page.", "loading");
+
+    const formData = new FormData();
+    formData.append("file", selectedApiFile, selectedApiFile.name || "media.mp4");
+    formData.append("language", "fr");
+
+    const response = await fetch(url, {
+      method: "POST",
+      body: formData
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      console.error(text);
+      return showApiStatus("Erreur API. Vérifie ton Worker ou la clé OpenAI côté Cloudflare.", "error");
+    }
+
+    const srt = cleanSrt(text);
+    srtInput.value = srt;
+    validateSrt();
+    showApiStatus("SRT généré et placé dans la zone SRT.", "success");
+    showMessage("Tu peux maintenant incruster et compresser la vidéo.", "success");
+  } catch (error) {
+    console.error(error);
+    showApiStatus("Impossible de contacter le Worker Cloudflare.", "error");
+  } finally {
+    generateSrtBtn.disabled = false;
+    generateSrtBtn.textContent = "Générer SRT via API";
+  }
+}
 
 function cleanSrt(text) {
   return String(text || "")
@@ -145,7 +227,7 @@ async function processVideo() {
   resetDownload();
 
   if (!selectedVideo) return showMessage("Ajoute d’abord une vidéo.", "error");
-  if (!validateSrt()) return showMessage("Colle un SRT valide avant de lancer.", "error");
+  if (!validateSrt()) return showMessage("Colle ou génère un SRT valide avant de lancer.", "error");
 
   const srt = cleanSrt(srtInput.value);
 
@@ -241,6 +323,12 @@ async function safeDelete(name) {
   }
 }
 
+function normalizeUrl(url) {
+  const clean = String(url || "").trim().replace(/\/+$/, "");
+  if (!clean.startsWith("https://")) return "";
+  return clean;
+}
+
 function setProgress(value, text) {
   progressBar.value = value;
   progressPercent.textContent = `${value}%`;
@@ -251,6 +339,12 @@ function showMessage(text, type) {
   message.textContent = text;
   message.className = "status";
   if (type) message.classList.add(type);
+}
+
+function showApiStatus(text, type) {
+  apiStatus.textContent = text;
+  apiStatus.className = "status";
+  if (type) apiStatus.classList.add(type);
 }
 
 function lockUi(locked) {
