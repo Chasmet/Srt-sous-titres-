@@ -26,6 +26,18 @@ const message = document.getElementById("message");
 const hiddenVideo = document.getElementById("hiddenVideo");
 const exportCanvas = document.getElementById("exportCanvas");
 
+const normalizeFile = document.getElementById("normalizeFile");
+const normalizeName = document.getElementById("normalizeName");
+const normalizeVideo = document.getElementById("normalizeVideo");
+const normalizeCanvas = document.getElementById("normalizeCanvas");
+const normalizeBtn = document.getElementById("normalizeBtn");
+const normalizeProgressBox = document.getElementById("normalizeProgressBox");
+const normalizeProgressText = document.getElementById("normalizeProgressText");
+const normalizeProgressPercent = document.getElementById("normalizeProgressPercent");
+const normalizeProgressBar = document.getElementById("normalizeProgressBar");
+const downloadNormalizedBtn = document.getElementById("downloadNormalizedBtn");
+const normalizeStatus = document.getElementById("normalizeStatus");
+
 const API_MAX_SIZE = 25 * 1024 * 1024;
 const EXPORT_FPS = 30;
 
@@ -38,9 +50,18 @@ let subtitleCues = [];
 let exportRunning = false;
 let drawFrameId = null;
 
+let selectedNormalizeFile = null;
+let normalizeObjectUrl = null;
+let normalizedUrl = null;
+let normalizeRunning = false;
+let normalizeFrameId = null;
+
 hiddenVideo.muted = true;
 hiddenVideo.playsInline = true;
 hiddenVideo.preload = "metadata";
+normalizeVideo.muted = true;
+normalizeVideo.playsInline = true;
+normalizeVideo.preload = "metadata";
 
 const savedWorker = localStorage.getItem("srt_app_worker_url");
 if (savedWorker) workerUrl.value = savedWorker;
@@ -85,6 +106,26 @@ videoFile.addEventListener("change", () => {
   hiddenVideo.load();
   showMessage("Vidéo prête. Elle reste visible pendant l’export.", "success");
 });
+
+normalizeFile.addEventListener("change", () => {
+  selectedNormalizeFile = normalizeFile.files && normalizeFile.files[0] ? normalizeFile.files[0] : null;
+  if (!selectedNormalizeFile) {
+    normalizeName.textContent = "Aucune vidéo à normaliser";
+    showNormalizeStatus("Aucune vidéo sélectionnée.", "");
+    return;
+  }
+
+  normalizeName.textContent = `${selectedNormalizeFile.name} - ${formatMo(selectedNormalizeFile.size)}`;
+  if (normalizeObjectUrl) URL.revokeObjectURL(normalizeObjectUrl);
+  normalizeObjectUrl = URL.createObjectURL(selectedNormalizeFile);
+  normalizeVideo.src = normalizeObjectUrl;
+  normalizeVideo.muted = true;
+  normalizeVideo.classList.remove("hidden");
+  normalizeVideo.load();
+  showNormalizeStatus("Vidéo chargée pour normalisation.", "success");
+});
+
+normalizeBtn.addEventListener("click", normalizeExistingVideo);
 
 srtInput.addEventListener("input", validateSrt);
 fontSize.addEventListener("input", () => fontSizeValue.textContent = fontSize.value);
@@ -246,12 +287,103 @@ async function exportByRecordingPreview() {
   }
 }
 
+async function normalizeExistingVideo() {
+  resetNormalizedDownload();
+  if (normalizeRunning) return;
+  if (!selectedNormalizeFile || !normalizeObjectUrl) return showNormalizeStatus("Choisis d’abord une vidéo à normaliser.", "error");
+  if (!window.MediaRecorder) return showNormalizeStatus("Ton navigateur ne supporte pas la normalisation locale.", "error");
+
+  try {
+    normalizeRunning = true;
+    lockNormalizeUi(true);
+    normalizeProgressBox.classList.remove("hidden");
+    setNormalizeProgress(1, "Retour de la vidéo au début...");
+    showNormalizeStatus("Normalisation en cours. La vidéo va être relue et réenregistrée.", "loading");
+
+    await prepareVideo(normalizeVideo);
+    setupNormalizeCanvasSize(normalizeVideo);
+    await forceVideoToStart(normalizeVideo);
+
+    if (normalizeVideo.currentTime > 0.5) {
+      throw new Error("Impossible de remettre la vidéo au début. Remets la prévisualisation à 00:00 puis relance.");
+    }
+
+    drawNormalizeFrame();
+
+    const canvasStream = normalizeCanvas.captureStream(EXPORT_FPS);
+    let mixedStream = canvasStream;
+
+    try {
+      const audioStream = normalizeVideo.captureStream ? normalizeVideo.captureStream() : normalizeVideo.mozCaptureStream?.();
+      const audioTracks = audioStream ? audioStream.getAudioTracks() : [];
+      if (audioTracks.length) mixedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+    } catch (error) {
+      console.warn("Audio non capturé pendant normalisation", error);
+    }
+
+    const mimeType = getRecorderMimeType();
+    const bitrate = getVideoBitrate();
+    const recorder = new MediaRecorder(mixedStream, { mimeType, videoBitsPerSecond: bitrate });
+    const chunks = [];
+
+    recorder.ondataavailable = event => {
+      if (event.data && event.data.size > 0) chunks.push(event.data);
+    };
+
+    const done = new Promise((resolve, reject) => {
+      recorder.onstop = resolve;
+      recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
+    });
+
+    normalizeVideo.onended = null;
+    recorder.start(1000);
+    setNormalizeProgress(1, "Normalisation en cours...");
+
+    await normalizeVideo.play();
+    normalizeLoop();
+
+    await new Promise(resolve => {
+      normalizeVideo.onended = resolve;
+    });
+
+    if (recorder.state !== "inactive") recorder.stop();
+    await done;
+
+    const normalizedBlob = new Blob(chunks, { type: mimeType || "video/webm" });
+    normalizedUrl = URL.createObjectURL(normalizedBlob);
+    downloadNormalizedBtn.href = normalizedUrl;
+    downloadNormalizedBtn.download = mimeType.includes("mp4") ? "video-normalisee.mp4" : "video-normalisee.webm";
+    downloadNormalizedBtn.textContent = mimeType.includes("mp4") ? "Télécharger la vidéo normalisée MP4" : "Télécharger la vidéo normalisée WebM";
+    downloadNormalizedBtn.classList.remove("hidden");
+
+    setNormalizeProgress(100, "Normalisation terminée.");
+    showNormalizeStatus(mimeType.includes("mp4") ? `MP4 normalisé prêt : ${formatMo(normalizedBlob.size)}.` : `WebM normalisé prêt : ${formatMo(normalizedBlob.size)}.`, "success");
+  } catch (error) {
+    console.error(error);
+    showNormalizeStatus(`Normalisation bloquée : ${error.message || "lecture impossible."}`, "error");
+    setNormalizeProgress(0, "Échec.");
+  } finally {
+    if (normalizeFrameId) cancelAnimationFrame(normalizeFrameId);
+    normalizeVideo.pause();
+    normalizeRunning = false;
+    lockNormalizeUi(false);
+  }
+}
+
 function drawLoop() {
   if (!exportRunning || hiddenVideo.ended) return;
   drawOneFrame();
   const percent = hiddenVideo.duration ? Math.min(99, Math.max(1, Math.round((hiddenVideo.currentTime / hiddenVideo.duration) * 100))) : 1;
   setProgress(percent, "Enregistrement local en cours...");
   drawFrameId = requestAnimationFrame(drawLoop);
+}
+
+function normalizeLoop() {
+  if (!normalizeRunning || normalizeVideo.ended) return;
+  drawNormalizeFrame();
+  const percent = normalizeVideo.duration ? Math.min(99, Math.max(1, Math.round((normalizeVideo.currentTime / normalizeVideo.duration) * 100))) : 1;
+  setNormalizeProgress(percent, "Normalisation en cours...");
+  normalizeFrameId = requestAnimationFrame(normalizeLoop);
 }
 
 function drawOneFrame() {
@@ -262,6 +394,15 @@ function drawOneFrame() {
   ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
   drawVideoContain(ctx, hiddenVideo, exportCanvas.width, exportCanvas.height);
   drawSubtitle(ctx, getSubtitleAt(hiddenVideo.currentTime));
+}
+
+function drawNormalizeFrame() {
+  const ctx = normalizeCanvas.getContext("2d", { alpha: false });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, normalizeCanvas.width, normalizeCanvas.height);
+  drawVideoContain(ctx, normalizeVideo, normalizeCanvas.width, normalizeCanvas.height);
 }
 
 function drawVideoContain(ctx, video, canvasW, canvasH) {
@@ -308,18 +449,27 @@ function setupCanvasSize(video) {
   const vw = video.videoWidth || 720;
   const vh = video.videoHeight || 1280;
 
-  if (format === "vertical") return setCanvas(1080, 1920);
-  if (format === "square") return setCanvas(1080, 1080);
-  if (format === "horizontal") return setCanvas(1920, 1080);
+  if (format === "vertical") return setCanvas(exportCanvas, 1080, 1920);
+  if (format === "square") return setCanvas(exportCanvas, 1080, 1080);
+  if (format === "horizontal") return setCanvas(exportCanvas, 1920, 1080);
   if (format === "mobile720") {
-    if (vh >= vw) return setCanvas(720, 1280);
-    return setCanvas(1280, 720);
+    if (vh >= vw) return setCanvas(exportCanvas, 720, 1280);
+    return setCanvas(exportCanvas, 1280, 720);
   }
 
   const maxSide = getMaxSideForQuality();
   const ratio = vw / vh;
-  if (vw >= vh) return setCanvas(maxSide, Math.round(maxSide / ratio));
-  return setCanvas(Math.round(maxSide * ratio), maxSide);
+  if (vw >= vh) return setCanvas(exportCanvas, maxSide, Math.round(maxSide / ratio));
+  return setCanvas(exportCanvas, Math.round(maxSide * ratio), maxSide);
+}
+
+function setupNormalizeCanvasSize(video) {
+  const vw = video.videoWidth || 720;
+  const vh = video.videoHeight || 1280;
+  const maxSide = getMaxSideForQuality();
+  const ratio = vw / vh;
+  if (vw >= vh) return setCanvas(normalizeCanvas, maxSide, Math.round(maxSide / ratio));
+  return setCanvas(normalizeCanvas, Math.round(maxSide * ratio), maxSide);
 }
 
 function getMaxSideForQuality() {
@@ -328,9 +478,9 @@ function getMaxSideForQuality() {
   return 720;
 }
 
-function setCanvas(w, h) {
-  exportCanvas.width = Math.max(2, Math.round(w));
-  exportCanvas.height = Math.max(2, Math.round(h));
+function setCanvas(canvas, w, h) {
+  canvas.width = Math.max(2, Math.round(w));
+  canvas.height = Math.max(2, Math.round(h));
 }
 
 function getVideoBitrate() {
@@ -474,6 +624,12 @@ function setProgress(value, text) {
   progressText.textContent = text;
 }
 
+function setNormalizeProgress(value, text) {
+  normalizeProgressBar.value = value;
+  normalizeProgressPercent.textContent = `${value}%`;
+  normalizeProgressText.textContent = text;
+}
+
 function showMessage(text, type) {
   message.textContent = text;
   message.className = "status";
@@ -484,6 +640,12 @@ function showApiStatus(text, type) {
   apiStatus.textContent = text;
   apiStatus.className = "status";
   if (type) apiStatus.classList.add(type);
+}
+
+function showNormalizeStatus(text, type) {
+  normalizeStatus.textContent = text;
+  normalizeStatus.className = "status";
+  if (type) normalizeStatus.classList.add(type);
 }
 
 function lockUi(locked) {
@@ -499,6 +661,12 @@ function lockUi(locked) {
   startBtn.textContent = locked ? "Traitement en cours..." : "Exporter avec sous-titres";
 }
 
+function lockNormalizeUi(locked) {
+  normalizeBtn.disabled = locked;
+  normalizeFile.disabled = locked;
+  normalizeBtn.textContent = locked ? "Normalisation en cours..." : "Normaliser le fichier";
+}
+
 function resetDownload() {
   if (drawFrameId) cancelAnimationFrame(drawFrameId);
   if (finalUrl) URL.revokeObjectURL(finalUrl);
@@ -507,6 +675,15 @@ function resetDownload() {
   downloadVideoBtn.href = "#";
   downloadVideoBtn.classList.add("hidden");
   setProgress(0, "Préparation...");
+}
+
+function resetNormalizedDownload() {
+  if (normalizeFrameId) cancelAnimationFrame(normalizeFrameId);
+  if (normalizedUrl) URL.revokeObjectURL(normalizedUrl);
+  normalizedUrl = null;
+  downloadNormalizedBtn.href = "#";
+  downloadNormalizedBtn.classList.add("hidden");
+  setNormalizeProgress(0, "Préparation...");
 }
 
 function downloadBlob(blob, filename) {
