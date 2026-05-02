@@ -1,9 +1,6 @@
 const workerUrl = document.getElementById("workerUrl");
 const apiAudioFile = document.getElementById("apiAudioFile");
-const apiVideoFile = document.getElementById("apiVideoFile");
 const apiAudioName = document.getElementById("apiAudioName");
-const apiVideoName = document.getElementById("apiVideoName");
-const useOriginalForApiBtn = document.getElementById("useOriginalForApiBtn");
 const saveWorkerBtn = document.getElementById("saveWorkerBtn");
 const generateSrtBtn = document.getElementById("generateSrtBtn");
 const apiStatus = document.getElementById("apiStatus");
@@ -29,8 +26,10 @@ const message = document.getElementById("message");
 const hiddenVideo = document.getElementById("hiddenVideo");
 const exportCanvas = document.getElementById("exportCanvas");
 
+const API_MAX_SIZE = 25 * 1024 * 1024;
+
 let selectedVideo = null;
-let selectedApiFile = null;
+let selectedApiAudio = null;
 let videoObjectUrl = null;
 let finalUrl = null;
 let subtitleCues = [];
@@ -50,29 +49,15 @@ saveWorkerBtn.addEventListener("click", () => {
 apiAudioFile.addEventListener("change", () => {
   const file = apiAudioFile.files && apiAudioFile.files[0] ? apiAudioFile.files[0] : null;
   if (!file) return;
-  selectedApiFile = file;
+
+  selectedApiAudio = file;
   apiAudioName.textContent = `${file.name} - ${formatMo(file.size)}`;
-  apiVideoName.textContent = "Aucune vidéo API sélectionnée";
-  apiVideoFile.value = "";
-  showApiStatus(file.size > 25 * 1024 * 1024 ? "Audio lourd pour l’API. Si le Worker refuse, coupe ou compresse l’audio avant." : "Audio prêt pour génération SRT.", file.size > 25 * 1024 * 1024 ? "warning" : "success");
-});
 
-apiVideoFile.addEventListener("change", () => {
-  const file = apiVideoFile.files && apiVideoFile.files[0] ? apiVideoFile.files[0] : null;
-  if (!file) return;
-  selectedApiFile = file;
-  apiVideoName.textContent = `${file.name} - ${formatMo(file.size)}`;
-  apiAudioName.textContent = "Aucun audio sélectionné";
-  apiAudioFile.value = "";
-  showApiStatus(file.size > 25 * 1024 * 1024 ? "Vidéo lourde pour l’API. Essaie plutôt un audio extrait ou une vidéo courte." : "Vidéo prête pour génération SRT.", file.size > 25 * 1024 * 1024 ? "warning" : "success");
-});
-
-useOriginalForApiBtn.addEventListener("click", () => {
-  if (!selectedVideo) return showApiStatus("Ajoute d’abord une vidéo originale plus bas.", "error");
-  selectedApiFile = selectedVideo;
-  apiVideoName.textContent = `Vidéo originale utilisée : ${selectedVideo.name} - ${formatMo(selectedVideo.size)}`;
-  apiAudioName.textContent = "Aucun audio sélectionné";
-  showApiStatus("La vidéo originale sera utilisée pour générer le SRT.", "success");
+  if (file.size > API_MAX_SIZE) {
+    showApiStatus("Audio trop lourd pour l’API. Utilise un audio plus court ou compressé, moins de 25 Mo.", "error");
+  } else {
+    showApiStatus("Audio prêt pour génération SRT.", "success");
+  }
 });
 
 generateSrtBtn.addEventListener("click", generateSrtWithApi);
@@ -84,16 +69,18 @@ videoFile.addEventListener("change", () => {
     showMessage("Aucune vidéo sélectionnée.", "");
     return;
   }
+
   videoName.textContent = `${selectedVideo.name} - ${formatMo(selectedVideo.size)}`;
   if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
   videoObjectUrl = URL.createObjectURL(selectedVideo);
   hiddenVideo.src = videoObjectUrl;
   hiddenVideo.load();
-  showMessage("Vidéo prête. Ce mode local compatible lit la vidéo et enregistre le résultat.", "success");
+  showMessage("Vidéo prête. Elle reste en local pour l’export sous-titré.", "success");
 });
 
 srtInput.addEventListener("input", validateSrt);
 fontSize.addEventListener("input", () => fontSizeValue.textContent = fontSize.value);
+
 pasteBtn.addEventListener("click", async () => {
   try {
     srtInput.value = cleanSrt(await navigator.clipboard.readText());
@@ -103,46 +90,62 @@ pasteBtn.addEventListener("click", async () => {
     showMessage("Collage automatique bloqué. Colle le SRT manuellement dans la zone.", "error");
   }
 });
+
 copyBtn.addEventListener("click", async () => {
   const srt = cleanSrt(srtInput.value);
   if (!srt) return showMessage("Aucun SRT à copier.", "error");
-  try { await navigator.clipboard.writeText(srt); } catch (e) { srtInput.select(); document.execCommand("copy"); }
+  try {
+    await navigator.clipboard.writeText(srt);
+  } catch (e) {
+    srtInput.select();
+    document.execCommand("copy");
+  }
   showMessage("SRT copié.", "success");
 });
+
 downloadSrtBtn.addEventListener("click", () => {
   const srt = cleanSrt(srtInput.value);
   if (!srt) return showMessage("Aucun SRT à télécharger.", "error");
   downloadBlob(new Blob([srt], { type: "text/plain;charset=utf-8" }), "sous-titres.srt");
   showMessage("SRT téléchargé.", "success");
 });
+
 startBtn.addEventListener("click", exportByRecordingPreview);
 
 async function generateSrtWithApi() {
   const url = normalizeUrl(workerUrl.value || localStorage.getItem("srt_app_worker_url") || "");
+
   if (!url) return showApiStatus("Ajoute ton lien Worker Cloudflare.", "error");
-  if (!selectedApiFile) return showApiStatus("Choisis un audio, une vidéo API, ou utilise la vidéo originale.", "error");
+  if (!selectedApiAudio) return showApiStatus("Choisis un fichier audio pour générer le SRT.", "error");
+  if (selectedApiAudio.size > API_MAX_SIZE) return showApiStatus(`Audio trop lourd : ${formatMo(selectedApiAudio.size)}. Prends un audio de moins de 25 Mo pour retrouver la génération rapide.`, "error");
+
   try {
     localStorage.setItem("srt_app_worker_url", url);
     workerUrl.value = url;
     generateSrtBtn.disabled = true;
     generateSrtBtn.textContent = "Génération en cours...";
-    showApiStatus("Envoi au Worker Cloudflare. Ne ferme pas la page.", "loading");
+    showApiStatus("Appel au générateur SRT audio en cours...", "loading");
+
     const formData = new FormData();
-    formData.append("file", selectedApiFile, selectedApiFile.name || "media.mp4");
+    formData.append("file", selectedApiAudio, selectedApiAudio.name || "audio.mp3");
     formData.append("language", "fr");
+
     const response = await fetch(url, { method: "POST", body: formData });
     const text = await response.text();
+
     if (!response.ok) {
       console.error(text);
-      return showApiStatus("Erreur API. Vérifie ton Worker ou la clé OpenAI côté Cloudflare.", "error");
+      return showApiStatus(`Erreur API ${response.status}. Le Worker répond mais refuse le fichier ou la requête.`, "error");
     }
-    srtInput.value = cleanSrt(text);
+
+    const srt = cleanSrt(text);
+    srtInput.value = srt;
     validateSrt();
-    showApiStatus("SRT généré et placé dans la zone SRT.", "success");
-    showMessage("Tu peux maintenant exporter avec sous-titres.", "success");
+    showApiStatus("SRT généré depuis l’audio et placé dans la zone SRT.", "success");
+    showMessage("Tu peux maintenant exporter la vidéo avec sous-titres.", "success");
   } catch (error) {
     console.error(error);
-    showApiStatus("Impossible de contacter le Worker Cloudflare.", "error");
+    showApiStatus("Impossible de contacter le Worker Cloudflare. Vérifie le lien ou la connexion.", "error");
   } finally {
     generateSrtBtn.disabled = false;
     generateSrtBtn.textContent = "Générer SRT via API";
