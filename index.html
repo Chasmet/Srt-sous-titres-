@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - sous-titres vidéo</title>
   <meta name="description" content="Application gratuite pour générer un SRT depuis un audio, coller un SRT, puis exporter une vidéo sous-titrée en local." />
-  <link rel="stylesheet" href="style.css?v=20260502-1440" />
+  <link rel="stylesheet" href="style.css?v=20260502-1500" />
 </head>
 <body>
   <main class="app">
@@ -117,7 +117,12 @@ Deuxième sous-titre"></textarea>
       <div id="message" class="status">En attente.</div>
     </section>
 
-    <video id="hiddenVideo" class="hiddenMedia" playsinline muted></video>
+    <section class="card previewCard">
+      <h2>Prévisualisation / export</h2>
+      <p class="info">La vidéo reste visible pendant l’export pour éviter les blocages Android.</p>
+      <video id="hiddenVideo" class="previewVideo" playsinline muted controls></video>
+    </section>
+
     <canvas id="exportCanvas" class="hiddenMedia"></canvas>
 
     <section class="card warning">
@@ -126,6 +131,6 @@ Deuxième sous-titre"></textarea>
     </section>
   </main>
 
-  <script src="script.js?v=20260502-1440"></script>
+  <script src="script.js?v=20260502-1500"></script>
 </body>
 </html>
