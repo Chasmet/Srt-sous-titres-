@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - sous-titres vidéo</title>
   <meta name="description" content="Application gratuite pour générer un SRT depuis un audio, coller un SRT, puis exporter une vidéo sous-titrée en local." />
-  <link rel="stylesheet" href="style.css?v=20260502-1620" />
+  <link rel="stylesheet" href="style.css?v=20260502-1640" />
 </head>
 <body>
   <main class="app">
@@ -131,14 +131,14 @@ Deuxième sous-titre"></textarea>
 
       <div class="nativePicker bigPicker">
         <label for="normalizeFile">Vidéo à normaliser</label>
-        <input id="normalizeFile" class="nativeFile" type="file" accept="video/*,.mp4,.webm,.mov,.mkv" />
+        <input id="normalizeFile" class="nativeFile" type="file" accept="video/*,.mp4,.webm,.mov,.mkv" onchange="window.loadNormalizeFileFromInput && window.loadNormalizeFileFromInput()" oninput="window.loadNormalizeFileFromInput && window.loadNormalizeFileFromInput()" />
         <small id="normalizeName">Aucune vidéo à normaliser</small>
       </div>
 
       <video id="normalizeVideo" class="previewVideo hidden" playsinline muted controls preload="metadata"></video>
       <canvas id="normalizeCanvas" class="hiddenMedia"></canvas>
 
-      <button id="normalizeBtn" class="btn secondary">Normaliser le fichier</button>
+      <button id="normalizeBtn" type="button" class="btn secondary" onclick="window.normalizeExistingVideo && window.normalizeExistingVideo()">Normaliser le fichier</button>
 
       <div id="normalizeProgressBox" class="progressBox hidden">
         <div class="progressTop">
@@ -158,6 +158,6 @@ Deuxième sous-titre"></textarea>
     </section>
   </main>
 
-  <script src="script.js?v=20260502-1620"></script>
+  <script src="script.js?v=20260502-1640"></script>
 </body>
 </html>
