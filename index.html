@@ -4,16 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - sous-titres vidéo</title>
-  <meta name="description" content="Application gratuite pour coller un SRT, générer un SRT via API au choix, incruster les sous-titres dans une vidéo et compresser en local dans le navigateur." />
-  <link rel="stylesheet" href="style.css?v=20260502-1245" />
+  <meta name="description" content="Application gratuite pour coller un SRT, générer un SRT via API au choix, incruster les sous-titres dans une vidéo et exporter en local." />
+  <link rel="stylesheet" href="style.css?v=20260502-1320" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Sans Render - API au choix</div>
+      <div class="pill">Sans Render - Local compatible</div>
       <h1>SRT Studio</h1>
-      <p>Charge ta vidéo, colle ton SRT ou génère-le via ton Worker Cloudflare, puis récupère un MP4 compressé directement depuis ton téléphone.</p>
+      <p>Charge ta vidéo, colle ton SRT ou génère-le via ton Worker Cloudflare, puis exporte localement avec sous-titres incrustés.</p>
     </header>
 
     <section class="card strong">
@@ -21,7 +21,7 @@
       <div class="steps">
         <div><span>1</span><p>Ajoute ta vidéo MP4.</p></div>
         <div><span>2</span><p>Colle ton SRT ou génère-le avec l’API.</p></div>
-        <div><span>3</span><p>Lance l’incrustation locale.</p></div>
+        <div><span>3</span><p>Export local compatible mobile.</p></div>
       </div>
     </section>
 
@@ -61,7 +61,7 @@
         <input id="videoFile" class="nativeFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
         <small id="videoName">Aucune vidéo sélectionnée</small>
       </div>
-      <p class="info">Conseil : commence avec une vidéo courte de test, entre 10 et 30 secondes.</p>
+      <p class="info">Ce mode lit la vidéo et enregistre le résultat, donc il accepte mieux les grosses vidéos. La qualité baisse un peu, comme avant.</p>
     </section>
 
     <section class="card">
@@ -92,11 +92,11 @@ Deuxième sous-titre"></textarea>
       <input id="fontSize" type="range" min="18" max="48" value="30" />
       <div class="rangeValue"><span>Petit</span><strong id="fontSizeValue">30</strong><span>Grand</span></div>
 
-      <label for="qualitySelect">Compression</label>
+      <label for="qualitySelect">Qualité export local</label>
       <select id="qualitySelect">
-        <option value="fast">Rapide - test</option>
-        <option value="balanced" selected>Équilibré - recommandé</option>
-        <option value="small">Plus léger - qualité réduite</option>
+        <option value="mobile" selected>Compatible mobile - conseillé</option>
+        <option value="medium">Qualité moyenne</option>
+        <option value="high">Qualité haute - plus lourd</option>
       </select>
 
       <label for="formatSelect">Format final</label>
@@ -105,12 +105,13 @@ Deuxième sous-titre"></textarea>
         <option value="vertical">Vertical 1080x1920</option>
         <option value="square">Carré 1080x1080</option>
         <option value="horizontal">Horizontal 1920x1080</option>
+        <option value="mobile720">Mobile 720p</option>
       </select>
     </section>
 
     <section class="card exportCard">
-      <h2>4. Export MP4</h2>
-      <button id="startBtn" class="btn primary">Incruster et compresser</button>
+      <h2>4. Export local</h2>
+      <button id="startBtn" class="btn primary">Exporter avec sous-titres</button>
 
       <div id="progressBox" class="progressBox hidden">
         <div class="progressTop">
@@ -120,16 +121,19 @@ Deuxième sous-titre"></textarea>
         <progress id="progressBar" value="0" max="100"></progress>
       </div>
 
-      <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.mp4">Télécharger la vidéo finale</a>
+      <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.webm">Télécharger la vidéo finale</a>
       <div id="message" class="status">En attente.</div>
     </section>
 
+    <video id="hiddenVideo" class="hiddenMedia" playsinline muted></video>
+    <canvas id="exportCanvas" class="hiddenMedia"></canvas>
+
     <section class="card warning">
       <h2>À savoir</h2>
-      <p>Render est supprimé. Le SRT peut venir soit du collage manuel gratuit, soit de ton Worker API. L’incrustation vidéo reste locale avec FFmpeg dans le navigateur.</p>
+      <p>Render est supprimé. L’export local compatible mobile enregistre la vidéo pendant sa lecture : c’est plus fiable pour les gros fichiers, mais la qualité peut baisser un peu.</p>
     </section>
   </main>
 
-  <script type="module" src="script.js?v=20260502-1245"></script>
+  <script type="module" src="script.js?v=20260502-1320"></script>
 </body>
 </html>
