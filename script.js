@@ -384,10 +384,10 @@ function setCanvas(canvas, w, h) {
 }
 
 function getVideoBitrate() {
-  if (qualitySelect.value === "high") return 18000000;
-  if (qualitySelect.value === "smooth134") return 12000000;
-  if (qualitySelect.value === "medium") return 8500000;
-  return 3500000;
+  if (qualitySelect.value === "high") return 14000000;
+  if (qualitySelect.value === "smooth134") return 6000000;
+  if (qualitySelect.value === "medium") return 4500000;
+  return 2500000;
 }
 
 function getRecorderMimeType() {
