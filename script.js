@@ -107,25 +107,30 @@ videoFile.addEventListener("change", () => {
   showMessage("Vidéo prête. Elle reste visible pendant l’export.", "success");
 });
 
-normalizeFile.addEventListener("change", () => {
-  selectedNormalizeFile = normalizeFile.files && normalizeFile.files[0] ? normalizeFile.files[0] : null;
-  if (!selectedNormalizeFile) {
+normalizeFile.addEventListener("change", loadNormalizeFileFromInput);
+normalizeFile.addEventListener("input", loadNormalizeFileFromInput);
+normalizeBtn.addEventListener("click", normalizeExistingVideo);
+
+function loadNormalizeFileFromInput() {
+  const file = normalizeFile.files && normalizeFile.files[0] ? normalizeFile.files[0] : null;
+  if (!file) {
+    selectedNormalizeFile = null;
     normalizeName.textContent = "Aucune vidéo à normaliser";
     showNormalizeStatus("Aucune vidéo sélectionnée.", "");
-    return;
+    return false;
   }
 
-  normalizeName.textContent = `${selectedNormalizeFile.name} - ${formatMo(selectedNormalizeFile.size)}`;
+  selectedNormalizeFile = file;
+  normalizeName.textContent = `${file.name} - ${formatMo(file.size)}`;
   if (normalizeObjectUrl) URL.revokeObjectURL(normalizeObjectUrl);
-  normalizeObjectUrl = URL.createObjectURL(selectedNormalizeFile);
+  normalizeObjectUrl = URL.createObjectURL(file);
   normalizeVideo.src = normalizeObjectUrl;
   normalizeVideo.muted = true;
   normalizeVideo.classList.remove("hidden");
   normalizeVideo.load();
   showNormalizeStatus("Vidéo chargée pour normalisation.", "success");
-});
-
-normalizeBtn.addEventListener("click", normalizeExistingVideo);
+  return true;
+}
 
 srtInput.addEventListener("input", validateSrt);
 fontSize.addEventListener("input", () => fontSizeValue.textContent = fontSize.value);
@@ -290,7 +295,11 @@ async function exportByRecordingPreview() {
 async function normalizeExistingVideo() {
   resetNormalizedDownload();
   if (normalizeRunning) return;
-  if (!selectedNormalizeFile || !normalizeObjectUrl) return showNormalizeStatus("Choisis d’abord une vidéo à normaliser.", "error");
+
+  if ((!selectedNormalizeFile || !normalizeObjectUrl) && !loadNormalizeFileFromInput()) {
+    return showNormalizeStatus("Fichier non détecté. Rechoisis la vidéo à normaliser puis rappuie sur Normaliser.", "error");
+  }
+
   if (!window.MediaRecorder) return showNormalizeStatus("Ton navigateur ne supporte pas la normalisation locale.", "error");
 
   try {
