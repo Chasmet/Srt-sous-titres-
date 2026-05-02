@@ -27,6 +27,7 @@ const hiddenVideo = document.getElementById("hiddenVideo");
 const exportCanvas = document.getElementById("exportCanvas");
 
 const API_MAX_SIZE = 25 * 1024 * 1024;
+const EXPORT_FPS = 30;
 
 let selectedVideo = null;
 let selectedApiAudio = null;
@@ -172,7 +173,7 @@ async function exportByRecordingPreview() {
     await prepareVideo(hiddenVideo);
     setupCanvasSize(hiddenVideo);
 
-    const canvasStream = exportCanvas.captureStream(25);
+    const canvasStream = exportCanvas.captureStream(EXPORT_FPS);
     let mixedStream = canvasStream;
 
     try {
@@ -214,10 +215,10 @@ async function exportByRecordingPreview() {
     downloadVideoBtn.download = mimeType.includes("mp4") ? "video-sous-titree.mp4" : "video-sous-titree.webm";
     downloadVideoBtn.classList.remove("hidden");
     setProgress(100, "Terminé.");
-    showMessage(`Export prêt : ${formatMo(blob.size)}. Qualité compressée comme l’ancienne version locale.`, "success");
+    showMessage(`Export prêt : ${formatMo(blob.size)}. Mode ${getQualityLabel()} avec meilleure qualité locale.`, "success");
   } catch (error) {
     console.error(error);
-    showMessage("Erreur pendant l’export local. Essaie le mode Mobile 720p ou une vidéo moins longue.", "error");
+    showMessage("Erreur pendant l’export local. Essaie Mobile léger ou une vidéo moins longue.", "error");
     setProgress(0, "Échec.");
   } finally {
     hiddenVideo.pause();
@@ -228,14 +229,27 @@ async function exportByRecordingPreview() {
 
 function drawLoop() {
   if (!exportRunning || hiddenVideo.ended || hiddenVideo.paused) return;
-  const ctx = exportCanvas.getContext("2d");
+  const ctx = exportCanvas.getContext("2d", { alpha: false });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-  ctx.drawImage(hiddenVideo, 0, 0, exportCanvas.width, exportCanvas.height);
+  drawVideoContain(ctx, hiddenVideo, exportCanvas.width, exportCanvas.height);
   drawSubtitle(ctx, getSubtitleAt(hiddenVideo.currentTime));
   const percent = hiddenVideo.duration ? Math.min(99, Math.round((hiddenVideo.currentTime / hiddenVideo.duration) * 100)) : 0;
   setProgress(percent, "Enregistrement local en cours...");
   requestAnimationFrame(drawLoop);
+}
+
+function drawVideoContain(ctx, video, canvasW, canvasH) {
+  const vw = video.videoWidth || canvasW;
+  const vh = video.videoHeight || canvasH;
+  const scale = Math.min(canvasW / vw, canvasH / vh);
+  const drawW = Math.round(vw * scale);
+  const drawH = Math.round(vh * scale);
+  const x = Math.round((canvasW - drawW) / 2);
+  const y = Math.round((canvasH - drawH) / 2);
+  ctx.drawImage(video, x, y, drawW, drawH);
 }
 
 function drawSubtitle(ctx, text) {
@@ -253,10 +267,10 @@ function drawSubtitle(ctx, text) {
   ctx.font = `900 ${fontPx}px Arial, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "rgba(0,0,0,0.62)";
+  ctx.fillStyle = "rgba(0,0,0,0.58)";
   roundRect(ctx, x, y, boxWidth, boxHeight, Math.round(fontPx * 0.45));
   ctx.fill();
-  ctx.lineWidth = Math.max(3, Math.round(fontPx / 7));
+  ctx.lineWidth = Math.max(4, Math.round(fontPx / 6));
   ctx.strokeStyle = "#000";
   ctx.fillStyle = "#fff";
   lines.forEach((line, index) => {
@@ -270,6 +284,7 @@ function setupCanvasSize(video) {
   const format = formatSelect.value;
   const vw = video.videoWidth || 720;
   const vh = video.videoHeight || 1280;
+
   if (format === "vertical") return setCanvas(1080, 1920);
   if (format === "square") return setCanvas(1080, 1080);
   if (format === "horizontal") return setCanvas(1920, 1080);
@@ -277,10 +292,17 @@ function setupCanvasSize(video) {
     if (vh >= vw) return setCanvas(720, 1280);
     return setCanvas(1280, 720);
   }
-  const maxSide = qualitySelect.value === "high" ? 1280 : 720;
+
+  const maxSide = getMaxSideForQuality();
   const ratio = vw / vh;
   if (vw >= vh) return setCanvas(maxSide, Math.round(maxSide / ratio));
   return setCanvas(Math.round(maxSide * ratio), maxSide);
+}
+
+function getMaxSideForQuality() {
+  if (qualitySelect.value === "high") return 1920;
+  if (qualitySelect.value === "medium") return 1280;
+  return 720;
 }
 
 function setCanvas(w, h) {
@@ -289,9 +311,15 @@ function setCanvas(w, h) {
 }
 
 function getVideoBitrate() {
-  if (qualitySelect.value === "high") return 6500000;
-  if (qualitySelect.value === "medium") return 4000000;
-  return 2500000;
+  if (qualitySelect.value === "high") return 14000000;
+  if (qualitySelect.value === "medium") return 8500000;
+  return 3500000;
+}
+
+function getQualityLabel() {
+  if (qualitySelect.value === "high") return "haute qualité";
+  if (qualitySelect.value === "medium") return "bonne qualité";
+  return "mobile léger";
 }
 
 function getRecorderMimeType() {
