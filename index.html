@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - sous-titres vidéo</title>
   <meta name="description" content="Application gratuite pour coller un SRT, générer un SRT via API au choix, incruster les sous-titres dans une vidéo et compresser en local dans le navigateur." />
-  <link rel="stylesheet" href="style.css?v=20260502-1230" />
+  <link rel="stylesheet" href="style.css?v=20260502-1245" />
 </head>
 <body>
   <main class="app">
@@ -32,17 +32,17 @@
       <label for="workerUrl">Lien Cloudflare Worker</label>
       <input id="workerUrl" type="url" value="https://srt-openai-worker.skypieachannel.workers.dev" autocomplete="off" />
 
-      <label class="fileBox smallFile" for="apiAudioFile">
-        <input id="apiAudioFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" />
-        <strong>Choisir un audio pour générer le SRT</strong>
+      <div class="nativePicker">
+        <label for="apiAudioFile">Audio pour générer le SRT</label>
+        <input id="apiAudioFile" class="nativeFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" />
         <small id="apiAudioName">Aucun audio sélectionné</small>
-      </label>
+      </div>
 
-      <label class="fileBox smallFile" for="apiVideoFile">
-        <input id="apiVideoFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
-        <strong>Choisir une vidéo pour générer le SRT</strong>
+      <div class="nativePicker">
+        <label for="apiVideoFile">Vidéo pour générer le SRT</label>
+        <input id="apiVideoFile" class="nativeFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
         <small id="apiVideoName">Aucune vidéo API sélectionnée</small>
-      </label>
+      </div>
 
       <button id="useOriginalForApiBtn" class="btn secondary">Utiliser la vidéo originale pour l’API</button>
 
@@ -56,11 +56,11 @@
 
     <section class="card">
       <h2>1. Vidéo originale</h2>
-      <label class="fileBox" for="videoFile">
-        <input id="videoFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
-        <strong>Choisir une vidéo</strong>
+      <div class="nativePicker bigPicker">
+        <label for="videoFile">Vidéo originale à sous-titrer</label>
+        <input id="videoFile" class="nativeFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
         <small id="videoName">Aucune vidéo sélectionnée</small>
-      </label>
+      </div>
       <p class="info">Conseil : commence avec une vidéo courte de test, entre 10 et 30 secondes.</p>
     </section>
 
@@ -130,6 +130,6 @@ Deuxième sous-titre"></textarea>
     </section>
   </main>
 
-  <script type="module" src="script.js?v=20260502-1230"></script>
+  <script type="module" src="script.js?v=20260502-1245"></script>
 </body>
 </html>
