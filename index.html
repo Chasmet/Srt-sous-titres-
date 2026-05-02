@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - sous-titres vidéo</title>
   <meta name="description" content="Application gratuite pour générer un SRT depuis un audio, coller un SRT, puis exporter une vidéo sous-titrée en local." />
-  <link rel="stylesheet" href="style.css?v=20260502-1530" />
+  <link rel="stylesheet" href="style.css?v=20260502-1600" />
 </head>
 <body>
   <main class="app">
@@ -125,12 +125,39 @@ Deuxième sous-titre"></textarea>
 
     <canvas id="exportCanvas" class="hiddenMedia"></canvas>
 
+    <section class="card normalizeCard">
+      <h2>5. Normaliser / réparer une vidéo</h2>
+      <p class="info">Recharge ici la vidéo déjà exportée si la durée affichée est fausse. Ce bloc réenregistre le fichier en local sans toucher à l’export principal.</p>
+
+      <div class="nativePicker bigPicker">
+        <label for="normalizeFile">Vidéo à normaliser</label>
+        <input id="normalizeFile" class="nativeFile" type="file" accept="video/*,.mp4,.webm,.mov,.mkv" />
+        <small id="normalizeName">Aucune vidéo à normaliser</small>
+      </div>
+
+      <video id="normalizeVideo" class="previewVideo hidden" playsinline muted controls preload="metadata"></video>
+      <canvas id="normalizeCanvas" class="hiddenMedia"></canvas>
+
+      <button id="normalizeBtn" class="btn secondary">Normaliser le fichier</button>
+
+      <div id="normalizeProgressBox" class="progressBox hidden">
+        <div class="progressTop">
+          <span id="normalizeProgressText">Préparation...</span>
+          <strong id="normalizeProgressPercent">0%</strong>
+        </div>
+        <progress id="normalizeProgressBar" value="0" max="100"></progress>
+      </div>
+
+      <a id="downloadNormalizedBtn" class="downloadLink hidden" href="#" download="video-normalisee.mp4">Télécharger la vidéo normalisée</a>
+      <div id="normalizeStatus" class="status">Normalisation en attente.</div>
+    </section>
+
     <section class="card warning">
       <h2>À savoir</h2>
       <p>L’application essaie d’exporter en MP4 si ton navigateur le permet. Sinon, elle exporte en WebM, sans serveur et sans Render.</p>
     </section>
   </main>
 
-  <script src="script.js?v=20260502-1530"></script>
+  <script src="script.js?v=20260502-1600"></script>
 </body>
 </html>
