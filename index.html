@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio - local</title>
   <meta name="description" content="Génère ou colle un SRT, prévisualise les sous-titres sur la vidéo, puis exporte en local sur téléphone." />
-  <link rel="stylesheet" href="style.css?v=20260502-1835" />
+  <link rel="stylesheet" href="style.css?v=20260502-1905" />
 </head>
 <body>
   <main class="app">
@@ -107,7 +107,7 @@ Deuxième sous-titre"></textarea>
       <div id="downloadsBox" class="actions"></div>
       <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.webm">Télécharger vidéo locale</a>
       <div id="message" class="status">En attente.</div>
-      <p class="info">Si le fichier est en WebM, convertis-le ensuite en MP4 avec ton convertisseur en ligne.</p>
+      <p class="info">La durée WebM est maintenant corrigée pour que le lecteur affiche le temps et la barre de lecture.</p>
     </section>
 
     <section class="card previewCard">
@@ -123,6 +123,7 @@ Deuxième sous-titre"></textarea>
       <p>Tout est local. Aucun Render. Pour un MP4 final, utilise un convertisseur en ligne ou CapCut après l’export.</p>
     </section>
   </main>
-  <script src="script.js?v=20260502-1835"></script>
+  <script src="https://unpkg.com/fix-webm-duration@1.0.6/fix-webm-duration.js"></script>
+  <script src="script.js?v=20260502-1905"></script>
 </body>
 </html>
