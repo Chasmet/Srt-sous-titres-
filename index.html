@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SRT Studio - local</title>
-  <meta name="description" content="Génère ou colle un SRT, prévisualise les sous-titres sur la vidéo, puis exporte en local sur téléphone." />
-  <link rel="stylesheet" href="style.css?v=20260502-1905" />
+  <title>SRT Studio - export local fluide</title>
+  <meta name="description" content="Colle ou génère un SRT, puis exporte une vidéo sous-titrée en local sur téléphone." />
+  <link rel="stylesheet" href="style.css?v=20260502-1930" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Mode local qualité</div>
+      <div class="pill">Mode local fluide</div>
       <h1>SRT Studio</h1>
-      <p>Charge ta vidéo, colle ou génère ton SRT, vérifie l’aperçu, puis exporte en local. Render est retiré.</p>
+      <p>Render est retiré. L’application crée maintenant une seule vidéo locale plus fluide.</p>
     </header>
 
     <section class="card strong">
-      <h2>Mode local stable</h2>
+      <h2>Workflow simple</h2>
       <div class="steps">
         <div><span>1</span><p>Charge la vidéo originale.</p></div>
         <div><span>2</span><p>Colle ton SRT ou génère-le avec l’API audio.</p></div>
-        <div><span>3</span><p>Exporte en 1 fichier ou en 3 parties.</p></div>
+        <div><span>3</span><p>Exporte en un seul fichier WebM.</p></div>
       </div>
     </section>
 
@@ -49,7 +49,7 @@
         <input id="videoFile" class="nativeFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
         <small id="videoName">Aucune vidéo sélectionnée</small>
       </div>
-      <p class="info">La vidéo reste sur ton téléphone. L’app filme l’aperçu en local.</p>
+      <p class="info">La vidéo reste sur ton téléphone. L’app ne l’envoie pas à Render.</p>
     </section>
 
     <section class="card">
@@ -72,19 +72,19 @@ Deuxième sous-titre"></textarea>
     </section>
 
     <section class="card">
-      <h2>3. Réglages qualité</h2>
+      <h2>3. Réglages fluidité</h2>
       <label for="fontSize">Taille des sous-titres</label>
       <input id="fontSize" type="range" min="18" max="48" value="30" />
       <div class="rangeValue"><span>Petit</span><strong id="fontSizeValue">30</strong><span>Grand</span></div>
 
       <label for="qualitySelect">Qualité export local</label>
       <select id="qualitySelect">
-        <option value="mobile">Mobile léger - plus stable</option>
-        <option value="smooth134" selected>Fluide qualité - conseillé</option>
-        <option value="medium">Bonne qualité - plus léger</option>
-        <option value="high">Haute qualité - très lourd</option>
+        <option value="mobile">Mobile léger - très stable</option>
+        <option value="smooth134" selected>Fluide compatible - conseillé</option>
+        <option value="medium">Bonne qualité - plus lourd</option>
+        <option value="high">Haute qualité - risque de saccades</option>
       </select>
-      <p class="info">Le mode Fluide qualité reprend l’esprit de la version qui sortait autour de 134 Mo selon la durée vidéo.</p>
+      <p class="info">Le mode Fluide compatible privilégie la lecture propre et la compatibilité plutôt que le poids maximum.</p>
 
       <label for="formatSelect">Format vidéo</label>
       <select id="formatSelect">
@@ -97,9 +97,8 @@ Deuxième sous-titre"></textarea>
     </section>
 
     <section class="card exportCard">
-      <h2>4. Export local</h2>
-      <button id="startBtn" class="btn primary">Exporter local en 1 vidéo</button>
-      <button id="splitExportBtn" class="btn secondary">Exporter local en 3 parties</button>
+      <h2>4. Export local en un seul fichier</h2>
+      <button id="startBtn" class="btn primary">Créer 1 vidéo fluide</button>
       <div id="progressBox" class="progressBox hidden">
         <div class="progressTop"><span id="progressText">Préparation...</span><strong id="progressPercent">0%</strong></div>
         <progress id="progressBar" value="0" max="100"></progress>
@@ -107,12 +106,12 @@ Deuxième sous-titre"></textarea>
       <div id="downloadsBox" class="actions"></div>
       <a id="downloadVideoBtn" class="downloadLink hidden" href="#" download="video-sous-titree.webm">Télécharger vidéo locale</a>
       <div id="message" class="status">En attente.</div>
-      <p class="info">La durée WebM est maintenant corrigée pour que le lecteur affiche le temps et la barre de lecture.</p>
+      <p class="info">Le fichier sort en WebM local. Convertis-le ensuite en MP4 avec ton convertisseur si besoin.</p>
     </section>
 
     <section class="card previewCard">
-      <h2>Prévisualisation / capture</h2>
-      <p class="info">Laisse cette vidéo visible et garde l’écran allumé pendant l’export.</p>
+      <h2>Prévisualisation / source</h2>
+      <p class="info">Laisse cette vidéo chargée et garde l’écran allumé pendant l’export.</p>
       <video id="hiddenVideo" class="previewVideo" playsinline muted controls preload="metadata"></video>
     </section>
 
@@ -120,10 +119,10 @@ Deuxième sous-titre"></textarea>
 
     <section class="card warning">
       <h2>À savoir</h2>
-      <p>Tout est local. Aucun Render. Pour un MP4 final, utilise un convertisseur en ligne ou CapCut après l’export.</p>
+      <p>Tout est local. Aucun Render. Une seule vidéo est créée pour éviter les coupures entre parties.</p>
     </section>
   </main>
   <script src="https://unpkg.com/fix-webm-duration@1.0.6/fix-webm-duration.js"></script>
-  <script src="script.js?v=20260502-1905"></script>
+  <script src="script.js?v=20260502-1930"></script>
 </body>
 </html>
