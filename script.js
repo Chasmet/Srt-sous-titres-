@@ -16,6 +16,7 @@ const fontSize = document.getElementById("fontSize");
 const fontSizeValue = document.getElementById("fontSizeValue");
 const qualitySelect = document.getElementById("qualitySelect");
 const formatSelect = document.getElementById("formatSelect");
+const compatStatus = document.getElementById("compatStatus");
 const startBtn = document.getElementById("startBtn");
 const progressBox = document.getElementById("progressBox");
 const progressText = document.getElementById("progressText");
@@ -33,13 +34,17 @@ const exportCanvas = document.getElementById("exportCanvas");
 
 const API_MAX_SIZE = 25 * 1024 * 1024;
 const EXPORT_FPS = 30;
-const OUTPUT_FILE_NAME = "video-sous-titree-ultra-fluide.webm";
+const DEFAULT_MP4_NAME = "video-sous-titree-capcut.mp4";
+const DEFAULT_WEBM_NAME = "video-sous-titree-secours.webm";
+const SRT_STORAGE_KEY = "srt_app_last_srt";
 
 let selectedVideo = null;
 let selectedApiAudio = null;
 let videoObjectUrl = null;
 let localUrl = null;
 let finalBlob = null;
+let finalFileName = DEFAULT_MP4_NAME;
+let finalMimeType = "video/mp4";
 let subtitleCues = [];
 let exportRunning = false;
 let drawFrameId = null;
@@ -51,6 +56,11 @@ hiddenVideo.preload = "metadata";
 
 const savedWorker = localStorage.getItem("srt_app_worker_url");
 if (savedWorker) workerUrl.value = savedWorker;
+
+const savedSrt = localStorage.getItem(SRT_STORAGE_KEY);
+if (savedSrt && !srtInput.value.trim()) srtInput.value = savedSrt;
+
+showCompatibilityStatus();
 
 saveWorkerBtn.addEventListener("click", () => {
   const url = normalizeUrl(workerUrl.value);
@@ -84,10 +94,14 @@ videoFile.addEventListener("change", () => {
   hiddenVideo.src = videoObjectUrl;
   hiddenVideo.muted = true;
   hiddenVideo.load();
-  showMessage("Vidéo prête. Colle ton SRT puis crée la vidéo ultra fluide.", "success");
+  resetDownload();
+  showMessage("Vidéo prête. Colle ton SRT puis crée la vidéo compatible CapCut.", "success");
 });
 
-srtInput.addEventListener("input", validateSrt);
+srtInput.addEventListener("input", () => {
+  localStorage.setItem(SRT_STORAGE_KEY, srtInput.value);
+  validateSrt();
+});
 fontSize.addEventListener("input", () => fontSizeValue.textContent = fontSize.value);
 startBtn.addEventListener("click", exportOneLocalVideo);
 saveVideoBtn.addEventListener("click", saveFinalVideoToPhone);
@@ -96,6 +110,7 @@ shareVideoBtn.addEventListener("click", shareFinalVideo);
 pasteBtn.addEventListener("click", async () => {
   try {
     srtInput.value = cleanSrt(await navigator.clipboard.readText());
+    localStorage.setItem(SRT_STORAGE_KEY, srtInput.value);
     validateSrt();
     showMessage("SRT collé. Tu peux lancer l’export.", "success");
   } catch (error) {
@@ -141,6 +156,7 @@ async function generateSrtWithApi() {
     if (!response.ok) return showApiStatus(`Erreur API ${response.status}.`, "error");
 
     srtInput.value = cleanSrt(text);
+    localStorage.setItem(SRT_STORAGE_KEY, srtInput.value);
     validateSrt();
     showApiStatus("SRT généré depuis l’audio.", "success");
   } catch (error) {
@@ -159,17 +175,29 @@ async function exportOneLocalVideo() {
     exportRunning = true;
     lockUi(true);
     progressBox.classList.remove("hidden");
-    showMessage("Création d’un seul fichier ultra fluide. Garde l’écran allumé.", "loading");
+    showMessage("Création de la vidéo. Garde l’écran allumé jusqu’à 100%.", "loading");
 
     await prepareVideo(hiddenVideo);
     const duration = hiddenVideo.duration;
     if (!duration || !Number.isFinite(duration)) throw new Error("Durée vidéo introuvable.");
 
-    const blob = await recordFullVideo(duration);
-    finalBlob = await fixDurationIfNeeded(blob, duration * 1000);
-    prepareResultPreview(finalBlob, OUTPUT_FILE_NAME);
+    const recorderConfig = getBestRecorderConfig();
+    finalMimeType = recorderConfig.mimeType;
+    finalFileName = recorderConfig.extension === "mp4" ? DEFAULT_MP4_NAME : DEFAULT_WEBM_NAME;
+
+    if (recorderConfig.extension === "mp4") {
+      showMessage("Export MP4 compatible CapCut en cours.", "loading");
+    } else {
+      showMessage("Ton navigateur refuse le MP4. Export WebM de secours en cours.", "warning");
+    }
+
+    const blob = await recordFullVideo(duration, recorderConfig);
+    finalBlob = await fixDurationIfNeeded(blob, duration * 1000, recorderConfig);
+    prepareResultPreview(finalBlob, finalFileName);
     setProgress(100, "Vidéo terminée.");
-    showMessage(`Vidéo prête : ${formatMo(finalBlob.size)}. Regarde le résultat puis enregistre.`, "success");
+
+    const label = recorderConfig.extension === "mp4" ? "MP4 compatible CapCut" : "WebM de secours";
+    showMessage(`${label} prêt : ${formatMo(finalBlob.size)}. Regarde le résultat puis enregistre.`, recorderConfig.extension === "mp4" ? "success" : "warning");
   } catch (error) {
     console.error(error);
     showMessage(`Erreur export : ${error.message || "capture impossible."}`, "error");
@@ -186,13 +214,14 @@ function prepareExport() {
   if (!selectedVideo || !videoObjectUrl) return showMessage("Ajoute d’abord une vidéo.", "error"), false;
   if (!validateSrt()) return showMessage("Colle ou génère un SRT valide avant l’export.", "error"), false;
   if (!window.MediaRecorder) return showMessage("Ton navigateur ne supporte pas l’export local vidéo.", "error"), false;
+  if (!exportCanvas.captureStream) return showMessage("Ton navigateur ne supporte pas la capture canvas.", "error"), false;
 
   subtitleCues = parseSrt(cleanSrt(srtInput.value));
   if (!subtitleCues.length) return showMessage("SRT illisible. Vérifie les timecodes.", "error"), false;
   return true;
 }
 
-async function recordFullVideo(duration) {
+async function recordFullVideo(duration, recorderConfig) {
   setupCanvasSize(hiddenVideo);
   await seekVideo(hiddenVideo, 0);
   drawOneFrame();
@@ -208,12 +237,13 @@ async function recordFullVideo(duration) {
     console.warn("Audio non capturé", error);
   }
 
-  const mimeType = getRecorderMimeType();
-  const recorder = new MediaRecorder(mixedStream, {
-    mimeType,
+  const recorderOptions = {
+    mimeType: recorderConfig.mimeType,
     videoBitsPerSecond: getVideoBitrate(),
     audioBitsPerSecond: 128000
-  });
+  };
+
+  const recorder = new MediaRecorder(mixedStream, recorderOptions);
   const chunks = [];
 
   recorder.ondataavailable = event => {
@@ -221,7 +251,7 @@ async function recordFullVideo(duration) {
   };
 
   const done = new Promise((resolve, reject) => {
-    recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType || "video/webm" }));
+    recorder.onstop = () => resolve(new Blob(chunks, { type: recorderConfig.mimeType }));
     recorder.onerror = event => reject(event.error || new Error("Erreur MediaRecorder"));
   });
 
@@ -233,8 +263,8 @@ async function recordFullVideo(duration) {
       drawOneFrame();
       const now = performance.now();
       if (now - lastProgressUpdate > 500) {
-        const progress = Math.min(100, Math.round((hiddenVideo.currentTime / duration) * 100));
-        setProgress(progress, "Création de la vidéo ultra fluide...");
+        const progress = Math.min(99, Math.round((hiddenVideo.currentTime / duration) * 100));
+        setProgress(progress, recorderConfig.extension === "mp4" ? "Création du MP4..." : "Création du WebM de secours...");
         lastProgressUpdate = now;
       }
       if (hiddenVideo.ended || hiddenVideo.currentTime >= duration) return resolve();
@@ -249,7 +279,9 @@ async function recordFullVideo(duration) {
   return blob;
 }
 
-async function fixDurationIfNeeded(blob, durationMs) {
+async function fixDurationIfNeeded(blob, durationMs, recorderConfig) {
+  if (recorderConfig.extension !== "webm") return blob;
+
   if (typeof fixWebmDuration === "function" && blob.type.includes("webm")) {
     try {
       setProgress(99, "Correction durée WebM...");
@@ -279,8 +311,8 @@ async function saveFinalVideoToPhone() {
   if (window.showSaveFilePicker) {
     try {
       const handle = await window.showSaveFilePicker({
-        suggestedName: OUTPUT_FILE_NAME,
-        types: [{ description: "Vidéo WebM", accept: { "video/webm": [".webm"] } }]
+        suggestedName: finalFileName,
+        types: [{ description: finalFileName.endsWith(".mp4") ? "Vidéo MP4" : "Vidéo WebM", accept: { [finalMimeType]: [finalFileName.endsWith(".mp4") ? ".mp4" : ".webm"] } }]
       });
       const writable = await handle.createWritable();
       await writable.write(finalBlob);
@@ -291,14 +323,14 @@ async function saveFinalVideoToPhone() {
     }
   }
 
-  triggerDownload(finalBlob, OUTPUT_FILE_NAME);
+  triggerDownload(finalBlob, finalFileName);
   showMessage("Téléchargement lancé. Regarde dans le dossier Téléchargements.", "success");
 }
 
 async function shareFinalVideo() {
   if (!finalBlob) return showMessage("Aucune vidéo prête à partager.", "error");
 
-  const file = new File([finalBlob], OUTPUT_FILE_NAME, { type: finalBlob.type || "video/webm" });
+  const file = new File([finalBlob], finalFileName, { type: finalBlob.type || finalMimeType });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: "Vidéo sous-titrée" });
@@ -384,9 +416,44 @@ function getVideoBitrate() {
   return 2200000;
 }
 
-function getRecorderMimeType() {
-  const types = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
-  return types.find(type => MediaRecorder.isTypeSupported(type)) || "video/webm";
+function getBestRecorderConfig() {
+  const mp4Types = [
+    "video/mp4;codecs=h264,aac",
+    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+    "video/mp4"
+  ];
+
+  const webmTypes = [
+    "video/webm;codecs=vp8,opus",
+    "video/webm;codecs=vp9,opus",
+    "video/webm"
+  ];
+
+  const mp4 = mp4Types.find(type => MediaRecorder.isTypeSupported(type));
+  if (mp4) return { mimeType: mp4, extension: "mp4" };
+
+  const webm = webmTypes.find(type => MediaRecorder.isTypeSupported(type));
+  if (webm) return { mimeType: webm, extension: "webm" };
+
+  throw new Error("Aucun format vidéo compatible trouvé sur ce navigateur.");
+}
+
+function showCompatibilityStatus() {
+  if (!compatStatus) return;
+  if (!window.MediaRecorder) {
+    compatStatus.textContent = "Export impossible : MediaRecorder non supporté par ce navigateur.";
+    compatStatus.className = "status error";
+    return;
+  }
+
+  const config = getBestRecorderConfig();
+  if (config.extension === "mp4") {
+    compatStatus.textContent = "OK : ton navigateur accepte l’export MP4. C’est le meilleur format pour CapCut.";
+    compatStatus.className = "status success";
+  } else {
+    compatStatus.textContent = "Attention : ton navigateur refuse le MP4. L’app utilisera WebM de secours, moins compatible CapCut.";
+    compatStatus.className = "status warning";
+  }
 }
 
 function setCanvas(canvas, w, h) {
@@ -425,7 +492,7 @@ function parseSrt(srtText) {
     const [startRaw, endRaw] = lines[timeIndex].split("-->");
     const text = lines.slice(timeIndex + 1).join(" ").trim();
     return { start: timeToSeconds(startRaw), end: timeToSeconds(endRaw), text };
-  }).filter(cue => cue && !Number.isNaN(cue.start) && !Number.isNaN(cue.end) && cue.text);
+  }).filter(cue => cue && !Number.isNaN(cue.start) && !Number.isNaN(cue.end) && cue.text && cue.end > cue.start);
 }
 
 function timeToSeconds(time) {
@@ -511,7 +578,7 @@ function lockUi(locked) {
   fontSize.disabled = locked;
   qualitySelect.disabled = locked;
   formatSelect.disabled = locked;
-  startBtn.textContent = locked ? "Traitement..." : "Créer 1 vidéo ultra fluide";
+  startBtn.textContent = locked ? "Traitement..." : "Créer vidéo compatible CapCut";
 }
 
 function resetDownload() {
@@ -519,6 +586,8 @@ function resetDownload() {
   if (localUrl) URL.revokeObjectURL(localUrl);
   localUrl = null;
   finalBlob = null;
+  finalFileName = DEFAULT_MP4_NAME;
+  finalMimeType = "video/mp4";
   downloadsBox.innerHTML = "";
   resultVideo.removeAttribute("src");
   resultVideo.load();
@@ -526,6 +595,7 @@ function resetDownload() {
   saveVideoBtn.classList.add("hidden");
   shareVideoBtn.classList.add("hidden");
   downloadVideoBtn.href = "#";
+  downloadVideoBtn.download = DEFAULT_MP4_NAME;
   setProgress(0, "Préparation...");
 }
 
