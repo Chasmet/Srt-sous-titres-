@@ -3,14 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SRT Studio - export vidéo compatible CapCut</title>
-  <meta name="description" content="Colle ou génère un SRT, puis exporte une vidéo sous-titrée en local sur téléphone avec MP4 prioritaire." />
-
+  <title>SRT Studio</title>
+  <meta name="description" content="Application mobile pour incruster des sous-titres SRT sur une vidéo." />
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#111827">
   <link rel="icon" href="logo.svg">
-
-  <link rel="stylesheet" href="style.css?v=20260607-mp4" />
+  <link rel="stylesheet" href="style.css?v=20260607-styles" />
 </head>
 <body>
   <main class="app">
@@ -18,7 +16,7 @@
       <div class="logo">SRT</div>
       <div class="pill">Export local compatible mobile</div>
       <h1>SRT Studio</h1>
-      <p>L’application incruste les sous-titres sur ta vidéo. Elle tente maintenant le MP4 compatible CapCut en priorité, puis WebM seulement si ton navigateur ne permet pas le MP4.</p>
+      <p>Charge une vidéo, colle ton SRT, choisis le style des sous-titres, puis crée une vidéo compatible mobile.</p>
     </header>
 
     <section class="card strong">
@@ -34,7 +32,7 @@
       <h2>Option API SRT</h2>
       <p class="info">Utilise cette partie seulement si tu veux créer le SRT depuis un audio. Si tu as déjà le SRT, colle-le directement plus bas.</p>
       <label for="workerUrl">Lien Cloudflare Worker</label>
-      <input id="workerUrl" type="url" value="https://srt-openai-worker.skypieachannel.workers.dev" autocomplete="off" />
+      <input id="workerUrl" type="url" value="" placeholder="Colle ton lien Worker ici" autocomplete="off" />
       <div class="nativePicker">
         <label for="apiAudioFile">Audio pour générer le SRT</label>
         <input id="apiAudioFile" class="nativeFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" />
@@ -54,20 +52,12 @@
         <input id="videoFile" class="nativeFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
         <small id="videoName">Aucune vidéo sélectionnée</small>
       </div>
-      <p class="info">La vidéo reste sur ton téléphone. L’app ne l’envoie pas à Render.</p>
+      <p class="info">La vidéo reste sur ton téléphone.</p>
     </section>
 
     <section class="card">
       <h2>2. SRT généré ou collé</h2>
-      <textarea id="srtInput" placeholder="Colle ton SRT ici :
-
-1
-00:00:00,000 --> 00:00:02,000
-Premier sous-titre
-
-2
-00:00:02,000 --> 00:00:04,000
-Deuxième sous-titre"></textarea>
+      <textarea id="srtInput" placeholder="Colle ton SRT ici"></textarea>
       <div class="actions">
         <button id="pasteBtn" class="btn secondary">Coller</button>
         <button id="copyBtn" class="btn secondary">Copier SRT</button>
@@ -82,6 +72,33 @@ Deuxième sous-titre"></textarea>
       <input id="fontSize" type="range" min="18" max="48" value="30" />
       <div class="rangeValue"><span>Petit</span><strong id="fontSizeValue">30</strong><span>Grand</span></div>
 
+      <label for="subtitleStyleSelect">Style des sous-titres</label>
+      <select id="subtitleStyleSelect">
+        <option value="original" selected>Original - blanc contour noir</option>
+        <option value="cinema">Cinéma - blanc premium</option>
+        <option value="neonBlue">Néon bleu - clip moderne</option>
+        <option value="yellowPunch">Jaune punchline - très visible</option>
+        <option value="redShadow">Rouge sombre - intense</option>
+        <option value="greenMatrix">Vert digital</option>
+        <option value="pinkGlow">Rose violet - réseaux sociaux</option>
+        <option value="blackBox">Boîte noire - lisibilité maximale</option>
+      </select>
+
+      <label for="subtitlePositionSelect">Position des sous-titres</label>
+      <select id="subtitlePositionSelect">
+        <option value="bottom">Bas classique</option>
+        <option value="safeBottom" selected>Milieu bas - conseillé Shorts</option>
+        <option value="middle">Centre de la vidéo</option>
+        <option value="upper">Haut de la vidéo</option>
+      </select>
+
+      <label for="subtitleLinesSelect">Nombre de lignes maximum</label>
+      <select id="subtitleLinesSelect">
+        <option value="1">1 ligne - punchline</option>
+        <option value="2" selected>2 lignes - original</option>
+        <option value="3">3 lignes - texte long</option>
+      </select>
+
       <label for="qualitySelect">Qualité export local</label>
       <select id="qualitySelect">
         <option value="mobile">Mobile léger - très stable</option>
@@ -89,7 +106,6 @@ Deuxième sous-titre"></textarea>
         <option value="medium">Bonne qualité - plus lourd</option>
         <option value="high">Haute qualité - risque de saccades</option>
       </select>
-      <p class="info">Le mode conseillé baisse un peu la résolution pour éviter les lags sur téléphone.</p>
 
       <label for="formatSelect">Format vidéo</label>
       <select id="formatSelect">
@@ -114,7 +130,6 @@ Deuxième sous-titre"></textarea>
       <button id="shareVideoBtn" class="btn secondary hidden">Partager / envoyer</button>
       <a id="downloadVideoBtn" class="hidden" href="#" download="video-sous-titree.mp4">Téléchargement technique</a>
       <div id="message" class="status">En attente.</div>
-      <p class="info">Quand la vidéo est prête, elle apparaît juste en dessous. Tu peux la regarder avant d’enregistrer.</p>
     </section>
 
     <section id="resultBox" class="card previewCard hidden">
@@ -130,13 +145,7 @@ Deuxième sous-titre"></textarea>
     </section>
 
     <canvas id="exportCanvas" class="hiddenMedia"></canvas>
-
-    <section class="card warning">
-      <h2>À savoir</h2>
-      <p>Le MP4 est prioritaire pour CapCut, TikTok, Instagram et YouTube Shorts. Si ton navigateur refuse le MP4, l’app crée un WebM de secours et l’indique clairement.</p>
-    </section>
   </main>
-  <script src="https://unpkg.com/fix-webm-duration@1.0.6/fix-webm-duration.js"></script>
-  <script src="script.js?v=20260607-mp4"></script>
+  <script src="script.js?v=20260607-styles"></script>
 </body>
 </html>
