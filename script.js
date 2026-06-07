@@ -14,6 +14,9 @@ const downloadSrtBtn = document.getElementById("downloadSrtBtn");
 const srtStatus = document.getElementById("srtStatus");
 const fontSize = document.getElementById("fontSize");
 const fontSizeValue = document.getElementById("fontSizeValue");
+const subtitleStyleSelect = document.getElementById("subtitleStyleSelect");
+const subtitlePositionSelect = document.getElementById("subtitlePositionSelect");
+const subtitleLinesSelect = document.getElementById("subtitleLinesSelect");
 const qualitySelect = document.getElementById("qualitySelect");
 const formatSelect = document.getElementById("formatSelect");
 const compatStatus = document.getElementById("compatStatus");
@@ -37,6 +40,7 @@ const EXPORT_FPS = 30;
 const DEFAULT_MP4_NAME = "video-sous-titree-capcut.mp4";
 const DEFAULT_WEBM_NAME = "video-sous-titree-secours.webm";
 const SRT_STORAGE_KEY = "srt_app_last_srt";
+const SETTINGS_STORAGE_KEY = "srt_app_subtitle_settings";
 
 let selectedVideo = null;
 let selectedApiAudio = null;
@@ -60,6 +64,7 @@ if (savedWorker) workerUrl.value = savedWorker;
 const savedSrt = localStorage.getItem(SRT_STORAGE_KEY);
 if (savedSrt && !srtInput.value.trim()) srtInput.value = savedSrt;
 
+loadSubtitleSettings();
 showCompatibilityStatus();
 
 saveWorkerBtn.addEventListener("click", () => {
@@ -102,7 +107,13 @@ srtInput.addEventListener("input", () => {
   localStorage.setItem(SRT_STORAGE_KEY, srtInput.value);
   validateSrt();
 });
-fontSize.addEventListener("input", () => fontSizeValue.textContent = fontSize.value);
+fontSize.addEventListener("input", () => {
+  fontSizeValue.textContent = fontSize.value;
+  saveSubtitleSettings();
+});
+[subtitleStyleSelect, subtitlePositionSelect, subtitleLinesSelect].forEach(select => {
+  if (select) select.addEventListener("change", saveSubtitleSettings);
+});
 startBtn.addEventListener("click", exportOneLocalVideo);
 saveVideoBtn.addEventListener("click", saveFinalVideoToPhone);
 shareVideoBtn.addEventListener("click", shareFinalVideo);
@@ -185,11 +196,8 @@ async function exportOneLocalVideo() {
     finalMimeType = recorderConfig.mimeType;
     finalFileName = recorderConfig.extension === "mp4" ? DEFAULT_MP4_NAME : DEFAULT_WEBM_NAME;
 
-    if (recorderConfig.extension === "mp4") {
-      showMessage("Export MP4 compatible CapCut en cours.", "loading");
-    } else {
-      showMessage("Ton navigateur refuse le MP4. Export WebM de secours en cours.", "warning");
-    }
+    if (recorderConfig.extension === "mp4") showMessage("Export MP4 compatible CapCut en cours.", "loading");
+    else showMessage("Ton navigateur refuse le MP4. Export WebM de secours en cours.", "warning");
 
     const blob = await recordFullVideo(duration, recorderConfig);
     finalBlob = await fixDurationIfNeeded(blob, duration * 1000, recorderConfig);
@@ -281,7 +289,6 @@ async function recordFullVideo(duration, recorderConfig) {
 
 async function fixDurationIfNeeded(blob, durationMs, recorderConfig) {
   if (recorderConfig.extension !== "webm") return blob;
-
   if (typeof fixWebmDuration === "function" && blob.type.includes("webm")) {
     try {
       setProgress(99, "Correction durée WebM...");
@@ -307,29 +314,12 @@ function prepareResultPreview(blob, filename) {
 
 async function saveFinalVideoToPhone() {
   if (!finalBlob) return showMessage("Aucune vidéo prête à enregistrer.", "error");
-
-  if (window.showSaveFilePicker) {
-    try {
-      const handle = await window.showSaveFilePicker({
-        suggestedName: finalFileName,
-        types: [{ description: finalFileName.endsWith(".mp4") ? "Vidéo MP4" : "Vidéo WebM", accept: { [finalMimeType]: [finalFileName.endsWith(".mp4") ? ".mp4" : ".webm"] } }]
-      });
-      const writable = await handle.createWritable();
-      await writable.write(finalBlob);
-      await writable.close();
-      return showMessage("Vidéo enregistrée sur le téléphone.", "success");
-    } catch (error) {
-      console.warn("Enregistrement manuel annulé", error);
-    }
-  }
-
   triggerDownload(finalBlob, finalFileName);
   showMessage("Téléchargement lancé. Regarde dans le dossier Téléchargements.", "success");
 }
 
 async function shareFinalVideo() {
   if (!finalBlob) return showMessage("Aucune vidéo prête à partager.", "error");
-
   const file = new File([finalBlob], finalFileName, { type: finalBlob.type || finalMimeType });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
@@ -339,7 +329,6 @@ async function shareFinalVideo() {
       return showMessage("Partage annulé.", "warning");
     }
   }
-
   await saveFinalVideoToPhone();
 }
 
@@ -366,36 +355,111 @@ function drawVideoContain(ctx, video, canvasW, canvasH) {
 
 function drawSubtitle(ctx, text) {
   if (!text) return;
+
+  const style = getSubtitleStyle();
   const fontPx = Math.max(18, Math.round((Number(fontSize.value) || 30) * (exportCanvas.width / 720)));
   const maxWidth = Math.round(exportCanvas.width * 0.86);
-  const lines = wrapText(ctx, text, maxWidth, fontPx).slice(0, 2);
+  const maxLines = Math.max(1, Math.min(3, Number(subtitleLinesSelect?.value || 2)));
+  const lines = wrapText(ctx, text, maxWidth, fontPx).slice(0, maxLines);
   const lineHeight = Math.round(fontPx * 1.22);
-  const y = exportCanvas.height - (lines.length * lineHeight) - Math.round(exportCanvas.height * 0.08);
+  const blockHeight = lines.length * lineHeight;
+  const y = getSubtitleY(blockHeight);
 
-  ctx.font = `900 ${fontPx}px Arial, sans-serif`;
+  ctx.save();
+  ctx.font = `${style.weight} ${fontPx}px Arial, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.lineWidth = Math.max(4, Math.round(fontPx / 6));
-  ctx.strokeStyle = "#000";
-  ctx.fillStyle = "#fff";
+
+  if (style.box) drawSubtitleBox(ctx, y, blockHeight, style);
 
   lines.forEach((line, index) => {
+    const x = exportCanvas.width / 2;
     const textY = y + index * lineHeight;
-    ctx.strokeText(line, exportCanvas.width / 2, textY);
-    ctx.fillText(line, exportCanvas.width / 2, textY);
+
+    if (style.glow) {
+      ctx.shadowColor = style.glow;
+      ctx.shadowBlur = Math.round(fontPx * 0.55);
+      ctx.fillStyle = style.glow;
+      ctx.fillText(line, x, textY);
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(style.strokeWidth, Math.round(fontPx / style.strokeRatio));
+    ctx.strokeStyle = style.stroke;
+    ctx.strokeText(line, x, textY);
+
+    ctx.shadowColor = style.shadow || "rgba(0,0,0,0.75)";
+    ctx.shadowBlur = style.shadowBlur;
+    ctx.shadowOffsetY = style.shadowOffsetY;
+    ctx.fillStyle = style.fill;
+    ctx.fillText(line, x, textY);
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
   });
+
+  ctx.restore();
+}
+
+function getSubtitleY(blockHeight) {
+  const position = subtitlePositionSelect?.value || "safeBottom";
+  if (position === "upper") return Math.round(exportCanvas.height * 0.16);
+  if (position === "middle") return Math.round((exportCanvas.height - blockHeight) / 2);
+  if (position === "bottom") return exportCanvas.height - blockHeight - Math.round(exportCanvas.height * 0.08);
+  return exportCanvas.height - blockHeight - Math.round(exportCanvas.height * 0.20);
+}
+
+function getSubtitleStyle() {
+  const name = subtitleStyleSelect?.value || "original";
+  const styles = {
+    original: { fill: "#ffffff", stroke: "#000000", strokeRatio: 6, strokeWidth: 4, weight: 900, shadowBlur: 2, shadowOffsetY: 2 },
+    cinema: { fill: "#f8fafc", stroke: "#111827", strokeRatio: 7, strokeWidth: 3, weight: 900, shadowBlur: 10, shadowOffsetY: 4 },
+    neonBlue: { fill: "#e0faff", stroke: "#023047", strokeRatio: 5, strokeWidth: 5, weight: 950, shadowBlur: 8, shadowOffsetY: 2, glow: "#22d3ee" },
+    yellowPunch: { fill: "#fde047", stroke: "#111827", strokeRatio: 5, strokeWidth: 5, weight: 950, shadowBlur: 6, shadowOffsetY: 3 },
+    redShadow: { fill: "#fecaca", stroke: "#450a0a", strokeRatio: 5, strokeWidth: 5, weight: 950, shadowBlur: 8, shadowOffsetY: 3, glow: "#ef4444" },
+    greenMatrix: { fill: "#bbf7d0", stroke: "#022c22", strokeRatio: 5, strokeWidth: 5, weight: 950, shadowBlur: 8, shadowOffsetY: 3, glow: "#22c55e" },
+    pinkGlow: { fill: "#fdf2f8", stroke: "#581c87", strokeRatio: 5, strokeWidth: 5, weight: 950, shadowBlur: 9, shadowOffsetY: 2, glow: "#d946ef" },
+    blackBox: { fill: "#ffffff", stroke: "#000000", strokeRatio: 8, strokeWidth: 2, weight: 900, shadowBlur: 2, shadowOffsetY: 2, box: true }
+  };
+  return styles[name] || styles.original;
+}
+
+function drawSubtitleBox(ctx, y, blockHeight, style) {
+  const paddingX = Math.round(exportCanvas.width * 0.05);
+  const paddingY = Math.round(blockHeight * 0.25);
+  const boxW = Math.round(exportCanvas.width * 0.9);
+  const boxH = blockHeight + paddingY;
+  const x = Math.round((exportCanvas.width - boxW) / 2);
+  const radius = Math.round(boxH * 0.28);
+  ctx.fillStyle = "rgba(0,0,0,0.72)";
+  roundRect(ctx, x + paddingX / 2, y - paddingY / 2, boxW - paddingX, boxH, radius);
+  ctx.fill();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
 }
 
 function setupCanvasSize(video) {
   const format = formatSelect.value;
   const vw = video.videoWidth || 720;
   const vh = video.videoHeight || 1280;
-
   if (format === "vertical") return setCanvas(exportCanvas, 720, 1280);
   if (format === "square") return setCanvas(exportCanvas, 720, 720);
   if (format === "horizontal") return setCanvas(exportCanvas, 1280, 720);
   if (format === "mobile720") return vh >= vw ? setCanvas(exportCanvas, 720, 1280) : setCanvas(exportCanvas, 1280, 720);
-
   const maxSide = getMaxSideForQuality();
   const ratio = vw / vh;
   if (vw >= vh) return setCanvas(exportCanvas, maxSide, Math.round(maxSide / ratio));
@@ -417,24 +481,12 @@ function getVideoBitrate() {
 }
 
 function getBestRecorderConfig() {
-  const mp4Types = [
-    "video/mp4;codecs=h264,aac",
-    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-    "video/mp4"
-  ];
-
-  const webmTypes = [
-    "video/webm;codecs=vp8,opus",
-    "video/webm;codecs=vp9,opus",
-    "video/webm"
-  ];
-
+  const mp4Types = ["video/mp4;codecs=h264,aac", "video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4"];
+  const webmTypes = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
   const mp4 = mp4Types.find(type => MediaRecorder.isTypeSupported(type));
   if (mp4) return { mimeType: mp4, extension: "mp4" };
-
   const webm = webmTypes.find(type => MediaRecorder.isTypeSupported(type));
   if (webm) return { mimeType: webm, extension: "webm" };
-
   throw new Error("Aucun format vidéo compatible trouvé sur ce navigateur.");
 }
 
@@ -445,7 +497,6 @@ function showCompatibilityStatus() {
     compatStatus.className = "status error";
     return;
   }
-
   const config = getBestRecorderConfig();
   if (config.extension === "mp4") {
     compatStatus.textContent = "OK : ton navigateur accepte l’export MP4. C’est le meilleur format pour CapCut.";
@@ -550,6 +601,33 @@ function normalizeUrl(url) {
   return clean.startsWith("https://") ? clean : "";
 }
 
+function saveSubtitleSettings() {
+  const settings = {
+    fontSize: fontSize.value,
+    style: subtitleStyleSelect?.value || "original",
+    position: subtitlePositionSelect?.value || "safeBottom",
+    lines: subtitleLinesSelect?.value || "2"
+  };
+  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function loadSubtitleSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    if (settings.fontSize) {
+      fontSize.value = settings.fontSize;
+      fontSizeValue.textContent = settings.fontSize;
+    }
+    if (settings.style && subtitleStyleSelect) subtitleStyleSelect.value = settings.style;
+    if (settings.position && subtitlePositionSelect) subtitlePositionSelect.value = settings.position;
+    if (settings.lines && subtitleLinesSelect) subtitleLinesSelect.value = settings.lines;
+  } catch (error) {
+    console.warn("Réglages sous-titres ignorés", error);
+  }
+}
+
 function setProgress(value, text) {
   progressBar.value = value;
   progressPercent.textContent = `${value}%`;
@@ -576,6 +654,9 @@ function lockUi(locked) {
   copyBtn.disabled = locked;
   downloadSrtBtn.disabled = locked;
   fontSize.disabled = locked;
+  if (subtitleStyleSelect) subtitleStyleSelect.disabled = locked;
+  if (subtitlePositionSelect) subtitlePositionSelect.disabled = locked;
+  if (subtitleLinesSelect) subtitleLinesSelect.disabled = locked;
   qualitySelect.disabled = locked;
   formatSelect.disabled = locked;
   startBtn.textContent = locked ? "Traitement..." : "Créer vidéo compatible CapCut";
