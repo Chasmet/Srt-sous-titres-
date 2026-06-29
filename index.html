@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio</title>
   <meta name="description" content="Application mobile pour incruster des sous-titres SRT sur une vidéo." />
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json?v=20260607-timing">
   <meta name="theme-color" content="#111827">
-  <link rel="icon" href="logo.svg">
-  <link rel="stylesheet" href="style.css?v=20260607-styles" />
+  <link rel="icon" href="logo.svg?v=20260607-timing">
+  <link rel="stylesheet" href="style.css?v=20260607-timing" />
 </head>
 <body>
   <main class="app">
@@ -99,6 +99,10 @@
         <option value="3">3 lignes - texte long</option>
       </select>
 
+      <label for="subtitleDelay">Décalage sous-titres si besoin</label>
+      <input id="subtitleDelay" type="range" min="-3" max="3" step="0.1" value="0" />
+      <p class="info">Laisse à 0 normalement. Mets +0.5 si les sous-titres arrivent trop tôt, -0.5 s’ils arrivent trop tard.</p>
+
       <label for="qualitySelect">Qualité export local</label>
       <select id="qualitySelect">
         <option value="mobile">Mobile léger - très stable</option>
@@ -146,6 +150,8 @@
 
     <canvas id="exportCanvas" class="hiddenMedia"></canvas>
   </main>
-  <script src="script.js?v=20260607-styles"></script>
+  <script src="fix-webm-duration.js?v=20260607-timing"></script>
+  <script src="script.js?v=20260607-timing"></script>
+  <script src="subtitle-timing-fix.js?v=20260607-timing"></script>
 </body>
 </html>
