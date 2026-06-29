@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio</title>
   <meta name="description" content="Application mobile pour incruster des sous-titres SRT sur une vidéo." />
-  <link rel="manifest" href="manifest.json?v=20260629-mp4full">
+  <link rel="manifest" href="manifest.json?v=20260629-1080p">
   <meta name="theme-color" content="#111827">
-  <link rel="icon" href="logo.svg?v=20260629-mp4full">
-  <link rel="stylesheet" href="style.css?v=20260629-mp4full" />
+  <link rel="icon" href="logo.svg?v=20260629-1080p">
+  <link rel="stylesheet" href="style.css?v=20260629-1080p" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Export MP4 full mobile</div>
+      <div class="pill">Export MP4 1080p mobile</div>
       <h1>SRT Studio</h1>
-      <p>Charge une vidéo, colle ton SRT, choisis le style des sous-titres, puis crée une vidéo MP4 directement sur ton téléphone.</p>
+      <p>Charge une vidéo, colle ton SRT, choisis le style des sous-titres, puis crée une vidéo MP4 propre jusqu’à 1080p.</p>
     </header>
 
     <section class="card strong">
@@ -106,26 +106,26 @@
 
       <label for="qualitySelect">Qualité export local</label>
       <select id="qualitySelect">
-        <option value="mobile">Mobile léger - très stable</option>
-        <option value="smooth134" selected>Fluide conseillé - meilleur compromis</option>
-        <option value="medium">Bonne qualité - plus lourd</option>
-        <option value="high">Haute qualité - risque de saccades</option>
+        <option value="mobile">720p stable - fichier plus léger</option>
+        <option value="smooth134">900p fluide - compromis</option>
+        <option value="medium">1080p propre - conseillé</option>
+        <option value="high" selected>1080p max - plus lourd</option>
       </select>
 
       <label for="formatSelect">Format vidéo</label>
       <select id="formatSelect">
-        <option value="keep" selected>Garder le format original</option>
-        <option value="vertical">Vertical 720x1280 stable mobile</option>
-        <option value="square">Carré 720x720 stable mobile</option>
-        <option value="horizontal">Horizontal 1280x720 stable mobile</option>
-        <option value="mobile720">Mobile 720p auto</option>
+        <option value="keep" selected>Garder le format original jusqu’à 1080p</option>
+        <option value="vertical">Vertical 1080x1920</option>
+        <option value="square">Carré 1080x1080</option>
+        <option value="horizontal">Horizontal 1920x1080</option>
+        <option value="mobile720">Auto 1080p mobile</option>
       </select>
       <div id="compatStatus" class="status">Compatibilité export MP4 en vérification...</div>
     </section>
 
     <section class="card exportCard">
       <h2>4. Export local MP4</h2>
-      <button id="startBtn" class="btn primary">Créer vidéo MP4 full</button>
+      <button id="startBtn" class="btn primary">Créer MP4 1080p propre</button>
       <div id="progressBox" class="progressBox hidden">
         <div class="progressTop"><span id="progressText">Préparation...</span><strong id="progressPercent">0%</strong></div>
         <progress id="progressBar" value="0" max="100"></progress>
@@ -151,7 +151,8 @@
 
     <canvas id="exportCanvas" class="hiddenMedia"></canvas>
   </main>
-  <script src="script.js?v=20260629-mp4full"></script>
-  <script src="mp4-full-fix.js?v=20260629-mp4full"></script>
+  <script src="script.js?v=20260629-1080p"></script>
+  <script src="mp4-full-fix.js?v=20260629-1080p"></script>
+  <script src="quality-1080.js?v=20260629-1080p"></script>
 </body>
 </html>
