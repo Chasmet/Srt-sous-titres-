@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio</title>
   <meta name="description" content="Application mobile pour incruster des sous-titres SRT sur une vidéo." />
-  <link rel="manifest" href="manifest.json?v=20260607-directtiming">
+  <link rel="manifest" href="manifest.json?v=20260629-webmstable">
   <meta name="theme-color" content="#111827">
-  <link rel="icon" href="logo.svg?v=20260607-directtiming">
-  <link rel="stylesheet" href="style.css?v=20260607-directtiming" />
+  <link rel="icon" href="logo.svg?v=20260629-webmstable">
+  <link rel="stylesheet" href="style.css?v=20260629-webmstable" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Export local compatible mobile</div>
+      <div class="pill">Export local stable mobile</div>
       <h1>SRT Studio</h1>
-      <p>Charge une vidéo, colle ton SRT, choisis le style des sous-titres, puis crée une vidéo compatible mobile.</p>
+      <p>Charge une vidéo, colle ton SRT, choisis le style des sous-titres, puis crée une vidéo WebM stable à convertir en MP4 si besoin.</p>
     </header>
 
     <section class="card strong">
@@ -125,7 +125,7 @@
 
     <section class="card exportCard">
       <h2>4. Export local en un seul fichier</h2>
-      <button id="startBtn" class="btn primary">Créer vidéo compatible CapCut</button>
+      <button id="startBtn" class="btn primary">Créer vidéo WebM stable</button>
       <div id="progressBox" class="progressBox hidden">
         <div class="progressTop"><span id="progressText">Préparation...</span><strong id="progressPercent">0%</strong></div>
         <progress id="progressBar" value="0" max="100"></progress>
@@ -133,7 +133,7 @@
       <div id="downloadsBox" class="actions"></div>
       <button id="saveVideoBtn" class="btn primary hidden">Enregistrer sur le téléphone</button>
       <button id="shareVideoBtn" class="btn secondary hidden">Partager / envoyer</button>
-      <a id="downloadVideoBtn" class="hidden" href="#" download="video-sous-titree.mp4">Téléchargement technique</a>
+      <a id="downloadVideoBtn" class="hidden" href="#" download="video-sous-titree.webm">Téléchargement technique</a>
       <div id="message" class="status">En attente.</div>
     </section>
 
@@ -151,7 +151,9 @@
 
     <canvas id="exportCanvas" class="hiddenMedia"></canvas>
   </main>
-  <script src="fix-webm-duration.js?v=20260607-directtiming"></script>
-  <script src="script.js?v=20260607-directtiming"></script>
+  <script src="https://unpkg.com/fix-webm-duration@1.0.6/fix-webm-duration.js"></script>
+  <script src="fix-webm-duration.js?v=20260629-webmstable"></script>
+  <script src="script.js?v=20260629-webmstable"></script>
+  <script src="browser-export-fix.js?v=20260629-webmstable"></script>
 </body>
 </html>
