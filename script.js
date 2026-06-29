@@ -17,6 +17,8 @@ const fontSizeValue = document.getElementById("fontSizeValue");
 const subtitleStyleSelect = document.getElementById("subtitleStyleSelect");
 const subtitlePositionSelect = document.getElementById("subtitlePositionSelect");
 const subtitleLinesSelect = document.getElementById("subtitleLinesSelect");
+const subtitleDelay = document.getElementById("subtitleDelay");
+const subtitleDelayValue = document.getElementById("subtitleDelayValue");
 const qualitySelect = document.getElementById("qualitySelect");
 const formatSelect = document.getElementById("formatSelect");
 const compatStatus = document.getElementById("compatStatus");
@@ -41,6 +43,7 @@ const DEFAULT_MP4_NAME = "video-sous-titree-capcut.mp4";
 const DEFAULT_WEBM_NAME = "video-sous-titree-secours.webm";
 const SRT_STORAGE_KEY = "srt_app_last_srt";
 const SETTINGS_STORAGE_KEY = "srt_app_subtitle_settings";
+const SUBTITLE_EPSILON = 0.02;
 
 let selectedVideo = null;
 let selectedApiAudio = null;
@@ -107,13 +110,20 @@ srtInput.addEventListener("input", () => {
   localStorage.setItem(SRT_STORAGE_KEY, srtInput.value);
   validateSrt();
 });
+
 fontSize.addEventListener("input", () => {
   fontSizeValue.textContent = fontSize.value;
   saveSubtitleSettings();
 });
-[subtitleStyleSelect, subtitlePositionSelect, subtitleLinesSelect].forEach(select => {
+
+[subtitleStyleSelect, subtitlePositionSelect, subtitleLinesSelect, subtitleDelay].forEach(select => {
   if (select) select.addEventListener("change", saveSubtitleSettings);
+  if (select && select === subtitleDelay) select.addEventListener("input", () => {
+    updateDelayLabel();
+    saveSubtitleSettings();
+  });
 });
+
 startBtn.addEventListener("click", exportOneLocalVideo);
 saveVideoBtn.addEventListener("click", saveFinalVideoToPhone);
 shareVideoBtn.addEventListener("click", shareFinalVideo);
@@ -226,12 +236,17 @@ function prepareExport() {
 
   subtitleCues = parseSrt(cleanSrt(srtInput.value));
   if (!subtitleCues.length) return showMessage("SRT illisible. Vérifie les timecodes.", "error"), false;
+
+  const first = subtitleCues[0];
+  if (first && first.start > 0) {
+    showMessage(`Timing OK : premier sous-titre à ${first.start.toFixed(2)} s.`, "success");
+  }
   return true;
 }
 
 async function recordFullVideo(duration, recorderConfig) {
   setupCanvasSize(hiddenVideo);
-  await seekVideo(hiddenVideo, 0);
+  await seekVideo(hiddenVideo, 0, true);
   drawOneFrame();
 
   const canvasStream = exportCanvas.captureStream(EXPORT_FPS);
@@ -339,7 +354,9 @@ function drawOneFrame() {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
   drawVideoContain(ctx, hiddenVideo, exportCanvas.width, exportCanvas.height);
-  drawSubtitle(ctx, getSubtitleAt(hiddenVideo.currentTime));
+
+  const subtitleText = getSubtitleAt(hiddenVideo.currentTime);
+  if (subtitleText) drawSubtitle(ctx, subtitleText);
 }
 
 function drawVideoContain(ctx, video, canvasW, canvasH) {
@@ -520,40 +537,105 @@ function prepareVideo(video) {
   });
 }
 
-function seekVideo(video, time) {
+function seekVideo(video, time, strict = false) {
   return new Promise(resolve => {
+    const target = Math.max(0, Number(time) || 0);
     video.pause();
-    const done = () => {
-      video.removeEventListener("seeked", done);
+
+    let attempts = 0;
+    let finished = false;
+
+    const finish = () => {
+      if (finished) return;
+      if (strict && Math.abs(video.currentTime - target) > 0.08 && attempts < 2) {
+        attempts++;
+        try { video.currentTime = target; } catch (error) {}
+        setTimeout(finish, 450);
+        return;
+      }
+      finished = true;
+      video.removeEventListener("seeked", onSeeked);
       clearTimeout(timer);
       resolve();
     };
-    const timer = setTimeout(done, 1000);
-    video.addEventListener("seeked", done, { once: true });
-    try { video.currentTime = Math.max(0, time); } catch (error) { done(); }
+
+    const onSeeked = () => requestAnimationFrame(finish);
+    const timer = setTimeout(finish, strict ? 4500 : 1500);
+    video.addEventListener("seeked", onSeeked, { once: true });
+
+    try {
+      video.currentTime = target;
+      if (Math.abs(video.currentTime - target) <= 0.04) requestAnimationFrame(finish);
+    } catch (error) {
+      finish();
+    }
   });
 }
 
 function parseSrt(srtText) {
-  const blocks = srtText.replace(/\r/g, "").trim().split(/\n\s*\n/);
+  const normalized = cleanSrt(srtText);
+  if (!normalized) return [];
+
+  const blocks = normalized.split(/\n\s*\n/);
   return blocks.map(block => {
     const lines = block.split("\n").map(line => line.trim()).filter(Boolean);
     const timeIndex = lines.findIndex(line => line.includes("-->"));
     if (timeIndex === -1) return null;
+
     const [startRaw, endRaw] = lines[timeIndex].split("-->");
+    const start = timeToSeconds(startRaw);
+    const end = timeToSeconds(endRaw);
     const text = lines.slice(timeIndex + 1).join(" ").trim();
-    return { start: timeToSeconds(startRaw), end: timeToSeconds(endRaw), text };
-  }).filter(cue => cue && !Number.isNaN(cue.start) && !Number.isNaN(cue.end) && cue.text && cue.end > cue.start);
+
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    if (!text || end <= start) return null;
+    return { start, end, text };
+  }).filter(Boolean).sort((a, b) => a.start - b.start);
 }
 
 function timeToSeconds(time) {
-  const parts = String(time).trim().replace(",", ".").split(":");
-  if (parts.length !== 3) return NaN;
-  return Number(parts[0]) * 3600 + Number(parts[1]) * 60 + Number(parts[2]);
+  const cleaned = String(time || "")
+    .trim()
+    .replace(",", ".")
+    .replace(/[^0-9:.]/g, "");
+
+  const parts = cleaned.split(":");
+  if (parts.length === 3) {
+    const h = Number(parts[0]);
+    const m = Number(parts[1]);
+    const s = Number(parts[2]);
+    if ([h, m, s].every(Number.isFinite)) return h * 3600 + m * 60 + s;
+  }
+
+  if (parts.length === 2) {
+    const m = Number(parts[0]);
+    const s = Number(parts[1]);
+    if ([m, s].every(Number.isFinite)) return m * 60 + s;
+  }
+
+  return NaN;
+}
+
+function getSubtitleDelaySeconds() {
+  const value = Number(subtitleDelay?.value || 0);
+  return Number.isFinite(value) ? value : 0;
 }
 
 function getSubtitleAt(time) {
-  const cue = subtitleCues.find(item => time >= item.start && time <= item.end);
+  const currentTime = Number(time);
+  if (!Number.isFinite(currentTime) || !subtitleCues.length) return "";
+
+  const effectiveTime = currentTime - getSubtitleDelaySeconds();
+  if (!Number.isFinite(effectiveTime) || effectiveTime < 0) return "";
+
+  const firstCue = subtitleCues[0];
+  if (firstCue && effectiveTime + SUBTITLE_EPSILON < firstCue.start) return "";
+
+  const cue = subtitleCues.find(item => {
+    if (!item) return false;
+    return effectiveTime + SUBTITLE_EPSILON >= item.start && effectiveTime < item.end - SUBTITLE_EPSILON;
+  });
+
   return cue ? cue.text : "";
 }
 
@@ -584,14 +666,16 @@ function validateSrt() {
     srtStatus.className = "status";
     return false;
   }
-  const valid = /\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}/.test(srt);
-  if (!valid) {
-    srtStatus.textContent = "SRT mal formaté : vérifie les timecodes.";
+
+  const cues = parseSrt(srt);
+  if (!cues.length) {
+    srtStatus.textContent = "SRT mal formaté : aucun timecode lisible.";
     srtStatus.className = "status warning";
     return false;
   }
-  const cueCount = (srt.match(/-->/g) || []).length;
-  srtStatus.textContent = `SRT valide : ${cueCount} ligne${cueCount > 1 ? "s" : ""} détectée${cueCount > 1 ? "s" : ""}.`;
+
+  const first = cues[0];
+  srtStatus.textContent = `SRT valide : ${cues.length} ligne${cues.length > 1 ? "s" : ""}. Premier sous-titre à ${first.start.toFixed(2)} s.`;
   srtStatus.className = "status success";
   return true;
 }
@@ -606,7 +690,8 @@ function saveSubtitleSettings() {
     fontSize: fontSize.value,
     style: subtitleStyleSelect?.value || "original",
     position: subtitlePositionSelect?.value || "safeBottom",
-    lines: subtitleLinesSelect?.value || "2"
+    lines: subtitleLinesSelect?.value || "2",
+    delay: subtitleDelay?.value || "0"
   };
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
 }
@@ -614,7 +699,10 @@ function saveSubtitleSettings() {
 function loadSubtitleSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return;
+    if (!raw) {
+      updateDelayLabel();
+      return;
+    }
     const settings = JSON.parse(raw);
     if (settings.fontSize) {
       fontSize.value = settings.fontSize;
@@ -623,9 +711,18 @@ function loadSubtitleSettings() {
     if (settings.style && subtitleStyleSelect) subtitleStyleSelect.value = settings.style;
     if (settings.position && subtitlePositionSelect) subtitlePositionSelect.value = settings.position;
     if (settings.lines && subtitleLinesSelect) subtitleLinesSelect.value = settings.lines;
+    if (settings.delay !== undefined && subtitleDelay) subtitleDelay.value = settings.delay;
+    updateDelayLabel();
   } catch (error) {
     console.warn("Réglages sous-titres ignorés", error);
+    updateDelayLabel();
   }
+}
+
+function updateDelayLabel() {
+  if (!subtitleDelayValue || !subtitleDelay) return;
+  const value = Number(subtitleDelay.value || 0);
+  subtitleDelayValue.textContent = `${value > 0 ? "+" : ""}${value.toFixed(1)} s`;
 }
 
 function setProgress(value, text) {
@@ -657,6 +754,7 @@ function lockUi(locked) {
   if (subtitleStyleSelect) subtitleStyleSelect.disabled = locked;
   if (subtitlePositionSelect) subtitlePositionSelect.disabled = locked;
   if (subtitleLinesSelect) subtitleLinesSelect.disabled = locked;
+  if (subtitleDelay) subtitleDelay.disabled = locked;
   qualitySelect.disabled = locked;
   formatSelect.disabled = locked;
   startBtn.textContent = locked ? "Traitement..." : "Créer vidéo compatible CapCut";
@@ -705,3 +803,4 @@ function formatMo(bytes) {
 }
 
 validateSrt();
+updateDelayLabel();
