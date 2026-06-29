@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SRT Studio</title>
   <meta name="description" content="Application mobile pour incruster des sous-titres SRT sur une vidéo." />
-  <link rel="manifest" href="manifest.json?v=20260629-webmstable">
+  <link rel="manifest" href="manifest.json?v=20260629-mp4full">
   <meta name="theme-color" content="#111827">
-  <link rel="icon" href="logo.svg?v=20260629-webmstable">
-  <link rel="stylesheet" href="style.css?v=20260629-webmstable" />
+  <link rel="icon" href="logo.svg?v=20260629-mp4full">
+  <link rel="stylesheet" href="style.css?v=20260629-mp4full" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Export local stable mobile</div>
+      <div class="pill">Export MP4 full mobile</div>
       <h1>SRT Studio</h1>
-      <p>Charge une vidéo, colle ton SRT, choisis le style des sous-titres, puis crée une vidéo WebM stable à convertir en MP4 si besoin.</p>
+      <p>Charge une vidéo, colle ton SRT, choisis le style des sous-titres, puis crée une vidéo MP4 directement sur ton téléphone.</p>
     </header>
 
     <section class="card strong">
@@ -120,12 +120,12 @@
         <option value="horizontal">Horizontal 1280x720 stable mobile</option>
         <option value="mobile720">Mobile 720p auto</option>
       </select>
-      <div id="compatStatus" class="status">Compatibilité export en vérification...</div>
+      <div id="compatStatus" class="status">Compatibilité export MP4 en vérification...</div>
     </section>
 
     <section class="card exportCard">
-      <h2>4. Export local en un seul fichier</h2>
-      <button id="startBtn" class="btn primary">Créer vidéo WebM stable</button>
+      <h2>4. Export local MP4</h2>
+      <button id="startBtn" class="btn primary">Créer vidéo MP4 full</button>
       <div id="progressBox" class="progressBox hidden">
         <div class="progressTop"><span id="progressText">Préparation...</span><strong id="progressPercent">0%</strong></div>
         <progress id="progressBar" value="0" max="100"></progress>
@@ -133,7 +133,7 @@
       <div id="downloadsBox" class="actions"></div>
       <button id="saveVideoBtn" class="btn primary hidden">Enregistrer sur le téléphone</button>
       <button id="shareVideoBtn" class="btn secondary hidden">Partager / envoyer</button>
-      <a id="downloadVideoBtn" class="hidden" href="#" download="video-sous-titree.webm">Téléchargement technique</a>
+      <a id="downloadVideoBtn" class="hidden" href="#" download="video-sous-titree.mp4">Téléchargement technique</a>
       <div id="message" class="status">En attente.</div>
     </section>
 
@@ -151,9 +151,7 @@
 
     <canvas id="exportCanvas" class="hiddenMedia"></canvas>
   </main>
-  <script src="https://unpkg.com/fix-webm-duration@1.0.6/fix-webm-duration.js"></script>
-  <script src="fix-webm-duration.js?v=20260629-webmstable"></script>
-  <script src="script.js?v=20260629-webmstable"></script>
-  <script src="browser-export-fix.js?v=20260629-webmstable"></script>
+  <script src="script.js?v=20260629-mp4full"></script>
+  <script src="mp4-full-fix.js?v=20260629-mp4full"></script>
 </body>
 </html>
