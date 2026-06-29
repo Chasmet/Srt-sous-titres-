@@ -1,7 +1,9 @@
 {
   "name": "SRT Studio",
   "short_name": "SRT",
-  "start_url": ".",
+  "description": "Application mobile pour créer des vidéos sous-titrées avec un fichier SRT.",
+  "start_url": "./?pwa=1",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#111827",
@@ -9,8 +11,9 @@
   "icons": [
     {
       "src": "logo.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml"
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }
