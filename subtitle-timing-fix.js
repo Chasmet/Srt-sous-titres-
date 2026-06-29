@@ -1,9 +1,35 @@
 /*
   Correctif timing sous-titres.
-  But : ne jamais afficher le premier sous-titre avant son timecode SRT réel.
+  But : ne jamais afficher un sous-titre avant son timecode SRT réel.
+  Ajoute aussi un décalage manuel si le SRT est en avance ou en retard.
 */
 (function () {
-  const EPSILON = 0.035;
+  const EPSILON = 0.015;
+  const DELAY_KEY = "srt_app_subtitle_delay";
+
+  const delayInput = document.getElementById("subtitleDelay");
+  const delayValue = document.getElementById("subtitleDelayValue");
+
+  if (delayInput) {
+    const savedDelay = localStorage.getItem(DELAY_KEY);
+    if (savedDelay !== null && Number.isFinite(Number(savedDelay))) delayInput.value = savedDelay;
+    updateDelayLabel();
+    delayInput.addEventListener("input", () => {
+      localStorage.setItem(DELAY_KEY, delayInput.value);
+      updateDelayLabel();
+    });
+  }
+
+  function updateDelayLabel() {
+    if (!delayInput || !delayValue) return;
+    const value = Number(delayInput.value || 0);
+    delayValue.textContent = `${value > 0 ? "+" : ""}${value.toFixed(1)} s`;
+  }
+
+  function getDelaySeconds() {
+    const value = Number(delayInput?.value || 0);
+    return Number.isFinite(value) ? value : 0;
+  }
 
   window.timeToSeconds = function timeToSecondsFixed(time) {
     const raw = String(time || "").trim();
@@ -52,18 +78,27 @@
   };
 
   window.getSubtitleAt = function getSubtitleAtFixed(time) {
-    const t = Number(time);
-    if (!Number.isFinite(t) || !Array.isArray(window.subtitleCues) && typeof subtitleCues === "undefined") return "";
+    const currentTime = Number(time);
+    if (!Number.isFinite(currentTime)) return "";
 
-    const cues = typeof subtitleCues !== "undefined" ? subtitleCues : window.subtitleCues;
+    let cues;
+    try {
+      cues = typeof subtitleCues !== "undefined" ? subtitleCues : window.subtitleCues;
+    } catch (error) {
+      cues = window.subtitleCues;
+    }
+
     if (!Array.isArray(cues) || !cues.length) return "";
 
+    const effectiveTime = currentTime - getDelaySeconds();
+    if (!Number.isFinite(effectiveTime) || effectiveTime < 0) return "";
+
     const firstCue = cues[0];
-    if (t + EPSILON < firstCue.start) return "";
+    if (effectiveTime + EPSILON < firstCue.start) return "";
 
     const cue = cues.find(item => {
       if (!item) return false;
-      return t + EPSILON >= item.start && t < item.end - EPSILON;
+      return effectiveTime + EPSILON >= item.start && effectiveTime < item.end - EPSILON;
     });
 
     return cue ? cue.text : "";
