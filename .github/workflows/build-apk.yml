@@ -46,12 +46,12 @@ jobs:
         run: ./gradlew clean assembleDebug --stacktrace
 
       - name: Préparer APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk SRT-Studio-Auto-v2.0-debug.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk SRT-Studio-Auto-v2.0.1-debug.apk
 
       - name: Publier APK dans Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: SRT-Studio-Auto-APK
-          path: SRT-Studio-Auto-v2.0-debug.apk
+          path: SRT-Studio-Auto-v2.0.1-debug.apk
           if-no-files-found: error
           retention-days: 30
