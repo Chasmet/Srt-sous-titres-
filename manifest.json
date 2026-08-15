@@ -1,19 +1,10 @@
 {
-  "name": "SRT Studio",
-  "short_name": "SRT",
-  "description": "Application mobile pour créer des vidéos sous-titrées avec un fichier SRT.",
-  "start_url": "./?pwa=1",
-  "scope": "./",
+  "name": "SRT Studio Auto",
+  "short_name": "SRT Auto",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#020617",
-  "theme_color": "#111827",
-  "orientation": "portrait",
-  "icons": [
-    {
-      "src": "logo.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ]
+  "background_color": "#07101b",
+  "theme_color": "#08111d",
+  "description": "Sous-titres automatiques : vidéo vers SRT puis MP4 1080p.",
+  "icons": [{"src":"logo.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
 }

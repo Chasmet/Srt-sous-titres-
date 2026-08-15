@@ -2,157 +2,94 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SRT Studio</title>
-  <meta name="description" content="Application mobile pour incruster des sous-titres SRT sur une vidéo." />
-  <link rel="manifest" href="manifest.json?v=20260629-1080p">
-  <meta name="theme-color" content="#111827">
-  <link rel="icon" href="logo.svg?v=20260629-1080p">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>SRT Studio Auto</title>
+  <meta name="description" content="Sous-titres automatiques : vidéo vers audio, SRT puis MP4 1080p." />
+  <link rel="manifest" href="manifest.json?v=20260815-auto2">
+  <meta name="theme-color" content="#08111d">
+  <link rel="icon" href="logo.svg?v=20260815-auto2">
   <link rel="stylesheet" href="style.css?v=20260629-1080p" />
+  <link rel="stylesheet" href="auto-ui.css?v=20260815-auto2" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div class="logo">SRT</div>
-      <div class="pill">Export MP4 1080p mobile</div>
-      <h1>SRT Studio</h1>
-      <p>Charge une vidéo, colle ton SRT, choisis le style des sous-titres, puis crée une vidéo MP4 propre jusqu’à 1080p.</p>
+      <div class="pill">AUTO • AUDIO • SRT • MP4 1080p</div>
+      <h1>SRT Studio Auto</h1>
+      <p>Choisis une vidéo. Dans l’APK, l’audio est extrait automatiquement, le SRT est généré, puis la vidéo sous-titrée peut être créée sans découper l’audio à la main.</p>
     </header>
 
-    <section class="card strong">
-      <h2>Workflow simple</h2>
-      <div class="steps">
-        <div><span>1</span><p>Charge la vidéo originale.</p></div>
-        <div><span>2</span><p>Colle ton SRT ou génère-le avec l’API audio.</p></div>
-        <div><span>3</span><p>Crée la vidéo, regarde le résultat, puis enregistre-la.</p></div>
+    <section class="card strong autoCard" id="autoFlowCard">
+      <div class="autoTitleRow">
+        <div>
+          <h2>Mode automatique</h2>
+          <p class="info">Une seule vidéo à choisir. Le reste s’enchaîne automatiquement dans l’APK.</p>
+        </div>
+        <span id="nativeBadge" class="nativeBadge">Détection APK…</span>
       </div>
-    </section>
 
-    <section class="card apiCard">
-      <h2>Option API SRT</h2>
-      <p class="info">Utilise cette partie seulement si tu veux créer le SRT depuis un audio. Si tu as déjà le SRT, colle-le directement plus bas.</p>
-      <label for="workerUrl">Lien Cloudflare Worker</label>
-      <input id="workerUrl" type="url" value="" placeholder="Colle ton lien Worker ici" autocomplete="off" />
-      <div class="nativePicker">
-        <label for="apiAudioFile">Audio pour générer le SRT</label>
-        <input id="apiAudioFile" class="nativeFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" />
-        <small id="apiAudioName">Aucun audio sélectionné</small>
-      </div>
-      <div class="actions twoActions">
-        <button id="saveWorkerBtn" class="btn secondary">Sauvegarder Worker</button>
-        <button id="generateSrtBtn" class="btn secondary">Générer SRT via API</button>
-      </div>
-      <div id="apiStatus" class="status">API en attente.</div>
-    </section>
-
-    <section class="card">
-      <h2>1. Vidéo originale</h2>
-      <div class="nativePicker bigPicker">
-        <label for="videoFile">Vidéo originale à sous-titrer</label>
+      <div class="nativePicker bigPicker autoPicker">
+        <label for="videoFile">1. Choisir la vidéo</label>
         <input id="videoFile" class="nativeFile" type="file" accept="video/*,.mp4,.mov,.webm,.mkv" />
         <small id="videoName">Aucune vidéo sélectionnée</small>
       </div>
-      <p class="info">La vidéo reste sur ton téléphone.</p>
-    </section>
 
-    <section class="card">
-      <h2>2. SRT généré ou collé</h2>
-      <textarea id="srtInput" placeholder="Colle ton SRT ici"></textarea>
-      <div class="actions">
-        <button id="pasteBtn" class="btn secondary">Coller</button>
-        <button id="copyBtn" class="btn secondary">Copier SRT</button>
-        <button id="downloadSrtBtn" class="btn secondary">Télécharger SRT</button>
+      <div class="autoSteps" aria-live="polite">
+        <div class="autoStep" id="autoStepAudio"><span class="stepNum">1</span><div><strong>Audio</strong><small id="autoStepAudioText">En attente</small></div></div>
+        <div class="autoStep" id="autoStepSrt"><span class="stepNum">2</span><div><strong>SRT</strong><small id="autoStepSrtText">En attente</small></div></div>
+        <div class="autoStep" id="autoStepVideo"><span class="stepNum">3</span><div><strong>Vidéo</strong><small id="autoStepVideoText">En attente</small></div></div>
       </div>
-      <div id="srtStatus" class="status">SRT en attente.</div>
-    </section>
 
-    <section class="card">
-      <h2>3. Réglages vidéo</h2>
-      <label for="fontSize">Taille des sous-titres</label>
-      <input id="fontSize" type="range" min="18" max="48" value="30" />
-      <div class="rangeValue"><span>Petit</span><strong id="fontSizeValue">30</strong><span>Grand</span></div>
-
-      <label for="subtitleStyleSelect">Style des sous-titres</label>
-      <select id="subtitleStyleSelect">
-        <option value="original" selected>Original - blanc contour noir</option>
-        <option value="cinema">Cinéma - blanc premium</option>
-        <option value="neonBlue">Néon bleu - clip moderne</option>
-        <option value="yellowPunch">Jaune punchline - très visible</option>
-        <option value="redShadow">Rouge sombre - intense</option>
-        <option value="greenMatrix">Vert digital</option>
-        <option value="pinkGlow">Rose violet - réseaux sociaux</option>
-        <option value="blackBox">Boîte noire - lisibilité maximale</option>
-      </select>
-
-      <label for="subtitlePositionSelect">Position des sous-titres</label>
-      <select id="subtitlePositionSelect">
-        <option value="bottom">Bas classique</option>
-        <option value="safeBottom" selected>Milieu bas - conseillé Shorts</option>
-        <option value="middle">Centre de la vidéo</option>
-        <option value="upper">Haut de la vidéo</option>
-      </select>
-
-      <label for="subtitleLinesSelect">Nombre de lignes maximum</label>
-      <select id="subtitleLinesSelect">
-        <option value="1">1 ligne - punchline</option>
-        <option value="2" selected>2 lignes - original</option>
-        <option value="3">3 lignes - texte long</option>
-      </select>
-
-      <label for="subtitleDelay">Décalage sous-titres si besoin</label>
-      <input id="subtitleDelay" type="range" min="-3" max="3" step="0.1" value="0" />
-      <div class="rangeValue"><span>Plus tôt</span><strong id="subtitleDelayValue">0.0 s</strong><span>Plus tard</span></div>
-      <p class="info">Laisse à 0 normalement. Mets +0.5 si les sous-titres arrivent trop tôt, -0.5 s’ils arrivent trop tard.</p>
-
-      <label for="qualitySelect">Qualité export local</label>
-      <select id="qualitySelect">
-        <option value="mobile">720p stable - fichier plus léger</option>
-        <option value="smooth134">900p fluide - compromis</option>
-        <option value="medium">1080p propre - conseillé</option>
-        <option value="high" selected>1080p max - plus lourd</option>
-      </select>
-
-      <label for="formatSelect">Format vidéo</label>
-      <select id="formatSelect">
-        <option value="keep" selected>Garder le format original jusqu’à 1080p</option>
-        <option value="vertical">Vertical 1080x1920</option>
-        <option value="square">Carré 1080x1080</option>
-        <option value="horizontal">Horizontal 1920x1080</option>
-        <option value="mobile720">Auto 1080p mobile</option>
-      </select>
-      <div id="compatStatus" class="status">Compatibilité export MP4 en vérification...</div>
-    </section>
-
-    <section class="card exportCard">
-      <h2>4. Export local MP4</h2>
-      <button id="startBtn" class="btn primary">Créer MP4 1080p propre</button>
-      <div id="progressBox" class="progressBox hidden">
-        <div class="progressTop"><span id="progressText">Préparation...</span><strong id="progressPercent">0%</strong></div>
-        <progress id="progressBar" value="0" max="100"></progress>
+      <div class="autoProgress">
+        <div class="progressTop"><span id="autoProgressText">Prêt.</span><strong id="autoProgressPercent">0%</strong></div>
+        <progress id="autoProgressBar" value="0" max="100"></progress>
       </div>
-      <div id="downloadsBox" class="actions"></div>
-      <button id="saveVideoBtn" class="btn primary hidden">Enregistrer sur le téléphone</button>
-      <button id="shareVideoBtn" class="btn secondary hidden">Partager / envoyer</button>
-      <a id="downloadVideoBtn" class="hidden" href="#" download="video-sous-titree.mp4">Téléchargement technique</a>
-      <div id="message" class="status">En attente.</div>
+
+      <label class="switchLine" for="autoExportToggle"><input id="autoExportToggle" type="checkbox" checked /><span>Créer automatiquement la vidéo dès que le SRT est prêt</span></label>
+      <div id="autoStatus" class="status">Choisis une vidéo pour commencer.</div>
     </section>
 
-    <section id="resultBox" class="card previewCard hidden">
-      <h2>5. Résultat final</h2>
-      <p class="info">Lis la vidéo ici. Si le résultat est bon, appuie sur “Enregistrer sur le téléphone”.</p>
-      <video id="resultVideo" class="previewVideo" playsinline controls preload="metadata"></video>
-    </section>
+    <details class="card settingsDetails" open>
+      <summary>Réglages vidéo et style</summary>
+      <div class="detailsBody">
+        <label for="fontSize">Taille des sous-titres</label>
+        <input id="fontSize" type="range" min="18" max="48" value="30" />
+        <div class="rangeValue"><span>Petit</span><strong id="fontSizeValue">30</strong><span>Grand</span></div>
+        <label for="subtitleStyleSelect">Style des sous-titres</label>
+        <select id="subtitleStyleSelect"><option value="original" selected>Original - blanc contour noir</option><option value="cinema">Cinéma - blanc premium</option><option value="neonBlue">Néon bleu - clip moderne</option><option value="yellowPunch">Jaune punchline - très visible</option><option value="redShadow">Rouge sombre - intense</option><option value="greenMatrix">Vert digital</option><option value="pinkGlow">Rose violet - réseaux sociaux</option><option value="blackBox">Boîte noire - lisibilité maximale</option></select>
+        <label for="subtitlePositionSelect">Position des sous-titres</label>
+        <select id="subtitlePositionSelect"><option value="bottom">Bas classique</option><option value="safeBottom" selected>Milieu bas - conseillé Shorts</option><option value="middle">Centre de la vidéo</option><option value="upper">Haut de la vidéo</option></select>
+        <label for="subtitleLinesSelect">Nombre de lignes maximum</label>
+        <select id="subtitleLinesSelect"><option value="1">1 ligne - punchline</option><option value="2" selected>2 lignes - original</option><option value="3">3 lignes - texte long</option></select>
+        <label for="subtitleDelay">Décalage sous-titres si besoin</label>
+        <input id="subtitleDelay" type="range" min="-3" max="3" step="0.1" value="0" />
+        <div class="rangeValue"><span>Plus tôt</span><strong id="subtitleDelayValue">0.0 s</strong><span>Plus tard</span></div>
+        <label for="qualitySelect">Qualité export local</label>
+        <select id="qualitySelect"><option value="mobile">720p stable - fichier plus léger</option><option value="smooth134">900p fluide - compromis</option><option value="medium" selected>1080p propre - conseillé</option><option value="high">1080p max - plus lourd</option></select>
+        <label for="formatSelect">Format vidéo</label>
+        <select id="formatSelect"><option value="keep" selected>Garder le format original jusqu’à 1080p</option><option value="vertical">Vertical 1080x1920</option><option value="square">Carré 1080x1080</option><option value="horizontal">Horizontal 1920x1080</option><option value="mobile720">Auto 1080p mobile</option></select>
+        <div id="compatStatus" class="status">Compatibilité export MP4 en vérification...</div>
+      </div>
+    </details>
 
-    <section class="card previewCard">
-      <h2>Source utilisée pendant l’export</h2>
-      <p class="info">Laisse cette vidéo chargée et garde l’écran allumé pendant l’export.</p>
-      <video id="hiddenVideo" class="previewVideo" playsinline muted controls preload="metadata"></video>
-    </section>
+    <details class="card settingsDetails">
+      <summary>SRT et API avancés</summary>
+      <div class="detailsBody">
+        <section class="advancedBlock apiCard"><h2>Cloudflare Worker</h2><p class="info">À renseigner une seule fois. L’APK le mémorise ensuite.</p><label for="workerUrl">Lien Cloudflare Worker</label><input id="workerUrl" type="url" value="" placeholder="https://...workers.dev" autocomplete="off" /><div class="actions twoActions"><button id="saveWorkerBtn" class="btn secondary">Sauvegarder Worker</button></div><div id="apiStatus" class="status">API en attente.</div></section>
+        <section class="advancedBlock"><h2>SRT généré ou collé</h2><textarea id="srtInput" placeholder="Le SRT automatique apparaîtra ici. Tu peux aussi le modifier manuellement."></textarea><div class="actions"><button id="pasteBtn" class="btn secondary">Coller</button><button id="copyBtn" class="btn secondary">Copier SRT</button><button id="downloadSrtBtn" class="btn secondary">Télécharger SRT</button></div><div id="srtStatus" class="status">SRT en attente.</div></section>
+        <section class="advancedBlock manualAudioBlock"><h2>Secours : audio manuel</h2><p class="info">Utile seulement hors APK ou pour tester un fichier audio seul.</p><div class="nativePicker"><label for="apiAudioFile">Audio pour générer le SRT</label><input id="apiAudioFile" class="nativeFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" /><small id="apiAudioName">Aucun audio sélectionné</small></div><button id="generateSrtBtn" class="btn secondary">Générer SRT via API</button></section>
+      </div>
+    </details>
 
+    <section class="card exportCard"><h2>Export MP4</h2><button id="startBtn" class="btn primary">Créer / recréer la vidéo</button><div id="progressBox" class="progressBox hidden"><div class="progressTop"><span id="progressText">Préparation...</span><strong id="progressPercent">0%</strong></div><progress id="progressBar" value="0" max="100"></progress></div><div id="downloadsBox" class="actions"></div><button id="saveVideoBtn" class="btn primary hidden">Enregistrer sur le téléphone</button><button id="shareVideoBtn" class="btn secondary hidden">Partager / envoyer</button><a id="downloadVideoBtn" class="hidden" href="#" download="video-sous-titree.mp4">Téléchargement technique</a><div id="message" class="status">En attente.</div></section>
+    <section id="resultBox" class="card previewCard hidden"><h2>Résultat final</h2><p class="info">Vérifie le résultat, puis enregistre ou partage la vidéo.</p><video id="resultVideo" class="previewVideo" playsinline controls preload="metadata"></video></section>
+    <details class="card settingsDetails sourceDetails"><summary>Aperçu de la vidéo source</summary><div class="detailsBody"><video id="hiddenVideo" class="previewVideo" playsinline muted controls preload="metadata"></video></div></details>
     <canvas id="exportCanvas" class="hiddenMedia"></canvas>
   </main>
   <script src="script.js?v=20260629-1080p"></script>
   <script src="mp4-full-fix.js?v=20260629-1080p"></script>
-  <script src="quality-1080.js?v=20260629-1080p"></script>
+  <script src="quality-1080.js?v=20260815-auto2"></script>
+  <script src="native-auto.js?v=20260815-auto2"></script>
 </body>
 </html>
